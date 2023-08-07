@@ -26,7 +26,23 @@ pub struct AccountData<Balance> {
     pub reserved: Balance,
 }
 
-impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {}
+impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
+
+}
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum Role {
+    Customer,
+    Manager,
+    Auditor,
+}
+
+pub trait ManageRoles<AccountId>{
+    fn role(id: &AccountId) -> Option<Role>;
+    fn register_role(id: &AccountId, role: Role) -> DispatchResult;
+    fn unregister_role(id: &AccountId) -> DispatchResult;
+    fn ensure_role(id: &AccountId, role: Role) -> DispatchResult;
+}
 
 pub use module::*;
 
@@ -51,7 +67,14 @@ pub mod module {
     }
 
     #[pallet::error]
-    pub enum Error<T> {}
+    pub enum Error<T> {
+        /// The account role can not changed, you must unregister first.
+        AccountAleadyRegistered,
+        /// The account hasn't registered a role.
+        AccountRoleNotRegistered,
+        /// The account role does not equal to the expected role.
+        IncorrectRole,
+    }
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -63,6 +86,11 @@ pub mod module {
     pub type Accounts<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
 
+    #[pallet::storage]
+    #[pallet::getter(fn account_roles)]
+    pub type AccountRoles<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, Role>;
+    
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config> {
         pub balances: Vec<(T::AccountId, T::Balance)>,
@@ -112,6 +140,58 @@ pub mod module {
             // Ensure root
 
             Ok(())
+        }
+
+        #[pallet::call_index(1)]
+        #[pallet::weight(0)]
+        pub fn register(
+            origin: OriginFor<T>,
+            role: Role,
+        ) -> DispatchResult {
+            let id = ensure_signed(origin)?;
+            Self::register_role(&id, role)
+        }
+
+        #[pallet::call_index(2)]
+        #[pallet::weight(0)]
+        pub fn unregister(
+            origin: OriginFor<T>,
+        ) -> DispatchResult {
+            let id = ensure_signed(origin)?;
+            Self::unregister_role(&id)
+        }
+        
+    }
+
+}
+
+impl <T: Config> ManageRoles<T::AccountId> for Pallet<T>{
+    fn role(id: &T::AccountId) -> Option<Role> {
+        AccountRoles::<T>::get(id)
+    }
+
+    fn register_role(id: &T::AccountId, role: Role) -> DispatchResult {
+        ensure!(AccountRoles::<T>::get(id).is_none(), Error::<T>::AccountAleadyRegistered);
+        AccountRoles::<T>::insert(id, role);
+        Ok(())
+    }
+
+    fn unregister_role(id: &T::AccountId) -> DispatchResult {
+        ensure!(AccountRoles::<T>::get(id).is_some(), Error::<T>::AccountRoleNotRegistered);
+        AccountRoles::<T>::remove(id);
+        Ok(())
+    }
+
+    fn ensure_role(id: &T::AccountId, role: Role) -> DispatchResult {
+        match AccountRoles::<T>::get(id) {
+            Some(r) => { 
+                if r != role {
+                   Err(Error::<T>::IncorrectRole.into())
+                } else {
+                    Ok(())
+                }
+            },
+            None => Err(Error::<T>::AccountRoleNotRegistered.into()),
         }
     }
 }
