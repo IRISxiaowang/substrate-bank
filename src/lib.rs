@@ -30,17 +30,26 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 
 }
 
+/// Enum representing the different roles that a user can have.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum Role {
+    /// Represents a regular customer role.
     Customer,
+    /// Represents a manager role with higher privileges.
     Manager,
+    /// Represents an auditor role responsible for auditing.
     Auditor,
 }
 
+/// Trait for managing user roles.
 pub trait ManageRoles<AccountId>{
+    /// Get the role of a given user.
     fn role(id: &AccountId) -> Option<Role>;
+    /// Register a role for a user.
     fn register_role(id: &AccountId, role: Role) -> DispatchResult;
+    /// Unregister a role for a user.
     fn unregister_role(id: &AccountId) -> DispatchResult;
+    /// Ensure that a user has a specific role.
     fn ensure_role(id: &AccountId, role: Role) -> DispatchResult;
 }
 
@@ -78,7 +87,13 @@ pub mod module {
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
-    pub enum Event<T: Config> {}
+    pub enum Event<T: Config> {
+        /// Event emitted when a user's role is registered.
+        RoleRegistered{user: T::AccountId, role: Role},
+
+        /// Event emitted when a user's role is unregistered.
+        RoleUnregistered{user: T::AccountId},
+    }
 
     /// The balance of a token type under an account.
     #[pallet::storage]
@@ -142,6 +157,16 @@ pub mod module {
             Ok(())
         }
 
+        /// Register a role for a user.
+        ///
+        /// This function allows a user to be registered with a specific role.
+        /// The user must be signed and authenticated.
+        ///
+        /// - `origin`: The origin of the transaction (signed account).
+        /// - `role`: The role to assign to the user.
+        ///
+        /// Returns `Ok(())` if the user is successfully registered with the role,
+        /// or an error if registration fails.
         #[pallet::call_index(1)]
         #[pallet::weight(0)]
         pub fn register(
@@ -152,6 +177,15 @@ pub mod module {
             Self::register_role(&id, role)
         }
 
+        /// Unregister a role for a user.
+        ///
+        /// This function allows a user's role to be unregistered.
+        /// The user must be signed and authenticated.
+        ///
+        /// - `origin`: The origin of the transaction (signed account).
+        ///
+        /// Returns `Ok(())` if the user's role is successfully unregistered,
+        /// or an error if unregistration fails.
         #[pallet::call_index(2)]
         #[pallet::weight(0)]
         pub fn unregister(
@@ -166,22 +200,28 @@ pub mod module {
 }
 
 impl <T: Config> ManageRoles<T::AccountId> for Pallet<T>{
+    /// Get the role of a given user.
     fn role(id: &T::AccountId) -> Option<Role> {
         AccountRoles::<T>::get(id)
     }
 
+    /// Register a role for a user, insert the user's role into storage and emit a role_registered event.
     fn register_role(id: &T::AccountId, role: Role) -> DispatchResult {
         ensure!(AccountRoles::<T>::get(id).is_none(), Error::<T>::AccountAleadyRegistered);
         AccountRoles::<T>::insert(id, role);
+        Self::deposit_event(Event::<T>::RoleRegistered { user: id.clone(), role });
         Ok(())
     }
 
+    /// Unregister a role for a user, remove the user's role from storage and emit a role unregistered event.
     fn unregister_role(id: &T::AccountId) -> DispatchResult {
         ensure!(AccountRoles::<T>::get(id).is_some(), Error::<T>::AccountRoleNotRegistered);
         AccountRoles::<T>::remove(id);
+        Self::deposit_event(Event::<T>::RoleUnregistered { user: id.clone() });
         Ok(())
     }
 
+    /// Ensure that a user has a specific role.
     fn ensure_role(id: &T::AccountId, role: Role) -> DispatchResult {
         match AccountRoles::<T>::get(id) {
             Some(r) => { 
