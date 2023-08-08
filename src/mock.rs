@@ -66,25 +66,23 @@ pub struct MockGenesisConfig {
 
 impl MockGenesisConfig {
     pub fn with_balances(balances: Vec<(AccountId, Balance)>) -> Self {
-        Self {
-            balances
-        }
+        Self { balances }
     }
 
     pub fn build(self) -> sp_io::TestExternalities {
-        let config = RuntimeGenesisConfig{
+        let config = RuntimeGenesisConfig {
             system: frame_system::GenesisConfig::default(),
             bank: crate::GenesisConfig {
                 balances: self.balances,
-            }
+            },
         };
-    
+
         let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-    
+
         ext.execute_with(|| {
             System::set_block_number(1);
         });
-    
+
         ext
     }
 }

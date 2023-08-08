@@ -26,9 +26,7 @@ pub struct AccountData<Balance> {
     pub reserved: Balance,
 }
 
-impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
-
-}
+impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {}
 
 /// Enum representing the different roles that a user can have.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -42,7 +40,7 @@ pub enum Role {
 }
 
 /// Trait for managing user roles.
-pub trait ManageRoles<AccountId>{
+pub trait ManageRoles<AccountId> {
     /// Get the role of a given user.
     fn role(id: &AccountId) -> Option<Role>;
     /// Register a role for a user.
@@ -77,7 +75,7 @@ pub mod module {
 
     #[pallet::error]
     pub enum Error<T> {
-        /// The account role can not changed, you must unregister first.
+        /// The account role cannot be changed, you must unregister first.
         AccountAleadyRegistered,
         /// The account hasn't registered a role.
         AccountRoleNotRegistered,
@@ -88,11 +86,11 @@ pub mod module {
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Event emitted when a user's role is registered.
-        RoleRegistered{user: T::AccountId, role: Role},
+        /// A user has registered a role
+        RoleRegistered { user: T::AccountId, role: Role },
 
-        /// Event emitted when a user's role is unregistered.
-        RoleUnregistered{user: T::AccountId},
+        /// A user's role is unregistered.
+        RoleUnregistered { user: T::AccountId },
     }
 
     /// The balance of a token type under an account.
@@ -103,9 +101,8 @@ pub mod module {
 
     #[pallet::storage]
     #[pallet::getter(fn account_roles)]
-    pub type AccountRoles<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, Role>;
-    
+    pub type AccountRoles<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Role>;
+
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config> {
         pub balances: Vec<(T::AccountId, T::Balance)>,
@@ -162,17 +159,11 @@ pub mod module {
         /// This function allows a user to be registered with a specific role.
         /// The user must be signed and authenticated.
         ///
-        /// - `origin`: The origin of the transaction (signed account).
+        /// Params:
         /// - `role`: The role to assign to the user.
-        ///
-        /// Returns `Ok(())` if the user is successfully registered with the role,
-        /// or an error if registration fails.
         #[pallet::call_index(1)]
         #[pallet::weight(0)]
-        pub fn register(
-            origin: OriginFor<T>,
-            role: Role,
-        ) -> DispatchResult {
+        pub fn register(origin: OriginFor<T>, role: Role) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::register_role(&id, role)
         }
@@ -181,25 +172,16 @@ pub mod module {
         ///
         /// This function allows a user's role to be unregistered.
         /// The user must be signed and authenticated.
-        ///
-        /// - `origin`: The origin of the transaction (signed account).
-        ///
-        /// Returns `Ok(())` if the user's role is successfully unregistered,
-        /// or an error if unregistration fails.
         #[pallet::call_index(2)]
         #[pallet::weight(0)]
-        pub fn unregister(
-            origin: OriginFor<T>,
-        ) -> DispatchResult {
+        pub fn unregister(origin: OriginFor<T>) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::unregister_role(&id)
         }
-        
     }
-
 }
 
-impl <T: Config> ManageRoles<T::AccountId> for Pallet<T>{
+impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
     /// Get the role of a given user.
     fn role(id: &T::AccountId) -> Option<Role> {
         AccountRoles::<T>::get(id)
@@ -207,15 +189,24 @@ impl <T: Config> ManageRoles<T::AccountId> for Pallet<T>{
 
     /// Register a role for a user, insert the user's role into storage and emit a role_registered event.
     fn register_role(id: &T::AccountId, role: Role) -> DispatchResult {
-        ensure!(AccountRoles::<T>::get(id).is_none(), Error::<T>::AccountAleadyRegistered);
+        ensure!(
+            AccountRoles::<T>::get(id).is_none(),
+            Error::<T>::AccountAleadyRegistered
+        );
         AccountRoles::<T>::insert(id, role);
-        Self::deposit_event(Event::<T>::RoleRegistered { user: id.clone(), role });
+        Self::deposit_event(Event::<T>::RoleRegistered {
+            user: id.clone(),
+            role,
+        });
         Ok(())
     }
 
     /// Unregister a role for a user, remove the user's role from storage and emit a role unregistered event.
     fn unregister_role(id: &T::AccountId) -> DispatchResult {
-        ensure!(AccountRoles::<T>::get(id).is_some(), Error::<T>::AccountRoleNotRegistered);
+        ensure!(
+            AccountRoles::<T>::get(id).is_some(),
+            Error::<T>::AccountRoleNotRegistered
+        );
         AccountRoles::<T>::remove(id);
         Self::deposit_event(Event::<T>::RoleUnregistered { user: id.clone() });
         Ok(())
@@ -224,13 +215,13 @@ impl <T: Config> ManageRoles<T::AccountId> for Pallet<T>{
     /// Ensure that a user has a specific role.
     fn ensure_role(id: &T::AccountId, role: Role) -> DispatchResult {
         match AccountRoles::<T>::get(id) {
-            Some(r) => { 
+            Some(r) => {
                 if r != role {
-                   Err(Error::<T>::IncorrectRole.into())
+                    Err(Error::<T>::IncorrectRole.into())
                 } else {
                     Ok(())
                 }
-            },
+            }
             None => Err(Error::<T>::AccountRoleNotRegistered.into()),
         }
     }
