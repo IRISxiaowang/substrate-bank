@@ -1,8 +1,8 @@
 [package]
 name = 'pallet-bank'
 version = '0.1.0'
-authors = ['']
-description = ''
+authors = ['Iris xiao Wang']
+description = 'banking pallet: provides basic banking operations'
 edition = '2021'
 license = '<TODO>'
 publish = false

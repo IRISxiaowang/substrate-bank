@@ -6,12 +6,11 @@ use super::*;
 use frame_support::{
     construct_runtime,
     traits::{ConstU32, ConstU64, Everything},
-    PalletId,
 };
 
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
-use crate as PalletBank;
+use crate as pallet_bank;
 
 pub type AccountId = u32;
 pub type Balance = u128;
@@ -50,29 +49,45 @@ impl Config for Runtime {
     type Balance = Balance;
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 construct_runtime!(
-    pub enum Runtime where
-        Block = Block,
-        NodeBlock = Block,
-        UncheckedExtrinsic = UncheckedExtrinsic,
+    pub enum Runtime
     {
         System: frame_system,
-        Bank: PalletBank,
+        Bank: pallet_bank,
     }
 );
 
+#[derive(Default)]
+pub struct MockGenesisConfig {
+    balances: Vec<(AccountId, Balance)>,
+}
+
+impl MockGenesisConfig {
+    pub fn with_balances(balances: Vec<(AccountId, Balance)>) -> Self {
+        Self { balances }
+    }
+
+    pub fn build(self) -> sp_io::TestExternalities {
+        let config = RuntimeGenesisConfig {
+            system: frame_system::GenesisConfig::default(),
+            bank: crate::GenesisConfig {
+                balances: self.balances,
+            },
+        };
+
+        let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
+        ext.execute_with(|| {
+            System::set_block_number(1);
+        });
+
+        ext
+    }
+}
+
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-    let config = GenesisConfig::default();
-
-    let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-    ext.execute_with(|| {
-        System::set_block_number(1);
-    });
-
-    ext
+pub fn default_test_ext() -> sp_io::TestExternalities {
+    MockGenesisConfig::default().build()
 }
