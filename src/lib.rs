@@ -20,7 +20,7 @@ mod weights;
 pub use weights::WeightInfo;
 
 /// balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct AccountData<Balance> {
     pub free: Balance,
     pub reserved: Balance,
@@ -55,6 +55,7 @@ pub use module::*;
 
 #[frame_support::pallet]
 pub mod module {
+
     use super::*;
 
     #[pallet::config]
@@ -70,7 +71,8 @@ pub mod module {
             + Copy
             + MaybeSerializeDeserialize
             + Debug
-            + From<u128>;
+            + From<u128>
+            + sp_std::iter::Sum;
     }
 
     #[pallet::error]
@@ -81,6 +83,10 @@ pub mod module {
         AccountRoleNotRegistered,
         /// The account role does not equal to the expected role.
         IncorrectRole,
+        /// The account role does not have the correct permission.
+        UnAuthorised,
+        /// The account's free balance is not sufficient.
+        InsufficientBalance,
     }
 
     #[pallet::event]
@@ -91,6 +97,21 @@ pub mod module {
 
         /// A user's role is unregistered.
         RoleUnregistered { user: T::AccountId },
+
+        /// A manager role mint some fund and deposit to an account.
+        Deposit { user: T::AccountId, amount: T::Balance },
+
+        /// A manager role burn some fund and withdraw from an account.
+        Withdraw { user: T::AccountId, amount: T::Balance },
+
+        /// Burn some fund from an account.
+        Burn { user: T::AccountId, amount: T::Balance },
+
+        /// Mint some fund into an account.
+        Mint { user: T::AccountId, amount: T::Balance },
+
+        /// Mint some fund into an account.
+        Transfer { from: T::AccountId, to: T::AccountId, amount: T::Balance },
     }
 
     /// The balance of a token type under an account.
@@ -102,6 +123,11 @@ pub mod module {
     #[pallet::storage]
     #[pallet::getter(fn account_roles)]
     pub type AccountRoles<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Role>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn total_issuance)]
+    /// Storage item to track the total issuance of the token.
+    pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config> {
@@ -136,21 +162,82 @@ pub mod module {
     pub struct Pallet<T>(_);
 
     #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        /// Integrity check: Ensure that the sum of all funds in balances matches total_issuance.
+        fn integrity_test() {
+            let total_issuance = TotalIssuance::<T>::get();
+
+            let actual_total = Accounts::<T>::iter().map(|(_, account)| account.free + account.reserved).sum();
+
+            assert!(
+                total_issuance == actual_total,
+                "Integrity check failed: total_issuance does not match sum of balances."
+            );
+    }
+    }
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Mint some fund and deposit into user's account.
         ///
-        /// Requires Root.
+        /// Requires Manager.
         #[pallet::call_index(0)]
         #[pallet::weight(0)]
         pub fn deposit(
-            _origin: OriginFor<T>,
+            origin: OriginFor<T>,
+            user: T::AccountId, 
             #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
-            // Ensure root
+            let id = ensure_signed(origin)?;
+            Self::ensure_role(&id, Role::Manager)?;
 
+            Self::mint(&user, amount)?;
+            Self::deposit_event(Event::<T>::Deposit { user: user.clone(), amount,} );
+            Ok(())
+        }
+
+        /// Withdraw from user's account and the withdrew funds are burned.
+        ///
+        /// Requires Manager.
+        #[pallet::call_index(1)]
+        #[pallet::weight(0)]
+        pub fn withdraw(
+            origin: OriginFor<T>,
+            user: T::AccountId,
+            #[pallet::compact] amount: T::Balance,
+        ) -> DispatchResult {
+            let id = ensure_signed(origin)?;
+            Self::ensure_role(&id, Role::Manager)?;
+            
+            Self::burn(&user, amount)?;
+            Self::deposit_event(Event::<T>::Withdraw { user: user.clone(), amount,} );
+            Ok(())
+        }
+
+        /// Transfer `amount` of fund from the current user to another user.
+        #[pallet::call_index(2)]
+        #[pallet::weight(0)]
+        pub fn transfer(
+            origin: OriginFor<T>,
+            to_user: T::AccountId,
+            #[pallet::compact] amount: T::Balance,
+        ) -> DispatchResult{
+            let id = ensure_signed(origin)?;
+            Self::ensure_role(&id, Role::Customer)?;
+            Self::ensure_role(&to_user, Role::Customer)?;
+
+            Accounts::<T>::mutate(&id, |balance| -> DispatchResult{
+                if balance.free >= amount {
+                    balance.free -= amount;
+                    Ok(())
+                }else{
+                    Err(Error::<T>::InsufficientBalance.into())
+                }
+            })?;
+            Accounts::<T>::mutate(&to_user, |balance|{
+                balance.free = balance.free.saturating_add(amount);
+            });
+            Self::deposit_event(Event::Transfer { from: id.clone(), to: to_user.clone(), amount });
             Ok(())
         }
 
@@ -161,7 +248,7 @@ pub mod module {
         ///
         /// Params:
         /// - `role`: The role to assign to the user.
-        #[pallet::call_index(1)]
+        #[pallet::call_index(3)]
         #[pallet::weight(0)]
         pub fn register(origin: OriginFor<T>, role: Role) -> DispatchResult {
             let id = ensure_signed(origin)?;
@@ -172,7 +259,7 @@ pub mod module {
         ///
         /// This function allows a user's role to be unregistered.
         /// The user must be signed and authenticated.
-        #[pallet::call_index(2)]
+        #[pallet::call_index(4)]
         #[pallet::weight(0)]
         pub fn unregister(origin: OriginFor<T>) -> DispatchResult {
             let id = ensure_signed(origin)?;
@@ -227,4 +314,37 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
     }
 }
 
-impl<T: Config> Pallet<T> {}
+impl<T: Config> Pallet<T> {
+    /// Burn some fund from a user's account.
+    fn burn(user: &T::AccountId, amount: T::Balance) -> DispatchResult{
+        Self::ensure_role(&user, Role::Customer)?;
+        Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
+            if balance.free >= amount{
+                balance.free -= amount;
+                Ok(())
+            }else{
+                Err(Error::<T>::InsufficientBalance.into())
+            }
+        })?;
+        TotalIssuance::<T>::mutate(|total|{
+            *total = total.saturating_sub(amount);
+        });
+        Self::deposit_event(Event::Burn { user: user.clone(), amount });
+        Ok(())
+    }
+
+    /// Mint some fund into a user's account.
+    fn mint(user: &T::AccountId, amount: T::Balance) -> DispatchResult{
+        Self::ensure_role(&user, Role::Customer)?;
+
+        Accounts::<T>::mutate(&user, |balance| {
+            balance.free = balance.free.saturating_add(amount);
+        });
+        TotalIssuance::<T>::mutate(|total|{
+            *total = total.saturating_add(amount);
+        });
+        Self::deposit_event(Event::Mint { user: user.clone(), amount });
+        Ok(())
+    }
+
+}
