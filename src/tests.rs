@@ -5,7 +5,7 @@
 use super::*;
 use crate::mock::{
     default_test_ext, Bank, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin, System, ALICE,
-    BOB,
+    BOB, TreasuryAccount,
 };
 use crate::AccountData;
 use frame_support::{assert_noop, assert_ok};
@@ -23,11 +23,10 @@ fn can_deposit() {
         // Check that the event was emitted
         assert_eq!(
             System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Mint { user: BOB, amount: 1_000 } )
-        );
-        assert_eq!(
-            System::events()[1].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Deposit { user: BOB, amount: 1_000 } )
+            RuntimeEvent::Bank(Event::<Runtime>::Deposit {
+                user: BOB,
+                amount: 1_000
+            })
         );
         assert_eq!(
             Accounts::<Runtime>::get(&BOB),
@@ -36,7 +35,10 @@ fn can_deposit() {
                 reserved: 0
             }
         );
-        assert_noop!(Bank::deposit(RuntimeOrigin::signed(ALICE), ALICE, 500), Error::<Runtime>::IncorrectRole);      
+        assert_noop!(
+            Bank::deposit(RuntimeOrigin::signed(ALICE), ALICE, 500),
+            Error::<Runtime>::IncorrectRole
+        );
         assert!(Bank::check_total_issuance());
     });
 
@@ -78,11 +80,10 @@ fn can_withdraw() {
             assert_ok!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 100));
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Burn { user: BOB, amount: 100 } )
-            );
-            assert_eq!(
-                System::events()[1].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Withdraw { user: BOB, amount: 100 } )
+                RuntimeEvent::Bank(Event::<Runtime>::Withdraw {
+                    user: BOB,
+                    amount: 100
+                })
             );
             assert_eq!(
                 Accounts::<Runtime>::get(&BOB),
@@ -91,12 +92,17 @@ fn can_withdraw() {
                     reserved: 0
                 }
             );
-            assert_noop!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 500), Error::<Runtime>::InsufficientBalance);
-            assert_noop!(Bank::withdraw(RuntimeOrigin::signed(ALICE), ALICE, 500), Error::<Runtime>::IncorrectRole);      
+            assert_noop!(
+                Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 500),
+                Error::<Runtime>::InsufficientBalance
+            );
+            assert_noop!(
+                Bank::withdraw(RuntimeOrigin::signed(ALICE), ALICE, 500),
+                Error::<Runtime>::IncorrectRole
+            );
             assert!(Bank::check_total_issuance());
         });
 }
-
 
 #[test]
 fn can_transfer() {
@@ -123,9 +129,13 @@ fn can_transfer() {
             // Check that the event was emitted
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Transfer { from: ALICE, to: BOB, amount: 100 } )
+                RuntimeEvent::Bank(Event::<Runtime>::Transfer {
+                    from: ALICE,
+                    to: BOB,
+                    amount: 100
+                })
             );
-        
+
             assert_eq!(
                 Accounts::<Runtime>::get(&BOB),
                 AccountData {
@@ -140,12 +150,78 @@ fn can_transfer() {
                     reserved: 0
                 }
             );
-            assert_noop!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 1_000), Error::<Runtime>::InsufficientBalance);
+            assert_noop!(
+                Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 1_000),
+                Error::<Runtime>::InsufficientBalance
+            );
             assert_eq!(Bank::accounts(3), AccountData::default());
             assert_ok!(Bank::register_role(&3, Role::Manager));
-            assert_noop!(Bank::transfer(RuntimeOrigin::signed(3), BOB, 100), Error::<Runtime>::IncorrectRole);
+            assert_noop!(
+                Bank::transfer(RuntimeOrigin::signed(3), BOB, 100),
+                Error::<Runtime>::IncorrectRole
+            );
             assert!(Bank::check_total_issuance());
         });
+}
+
+#[test]
+fn can_reaped() {
+    default_test_ext().execute_with(|| {
+        assert_eq!(Bank::accounts(&ALICE), AccountData::default());
+        assert_eq!(Bank::accounts(&BOB), AccountData::default());
+        assert_eq!(Bank::accounts(&3), AccountData::default());
+        assert_ok!(Bank::register_role(&ALICE, Role::Customer));
+        assert_ok!(Bank::register_role(&BOB, Role::Customer));
+        assert_ok!(Bank::register_role(&3, Role::Manager));
+        
+        assert_noop!(Bank::deposit(RuntimeOrigin::signed(3), BOB, 4), Error::<Runtime>::AmountTooSmall);
+        assert_noop!(Bank::withdraw(RuntimeOrigin::signed(3), BOB, 4), Error::<Runtime>::AmountTooSmall);
+        assert_noop!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 4), Error::<Runtime>::AmountTooSmall);
+        
+        assert_ok!(Bank::deposit(RuntimeOrigin::signed(3), BOB, 100));
+        assert_eq!(
+            Accounts::<Runtime>::get(&BOB),
+            AccountData {
+                free: 100,
+                reserved: 0
+            }
+        );
+        assert_ok!(Bank::transfer(RuntimeOrigin::signed(BOB), ALICE, 98));
+        assert_eq!(
+            Accounts::<Runtime>::get(&BOB),
+            AccountData {
+                free: 2,
+                reserved: 0
+            }
+        );
+        assert_eq!(
+            Accounts::<Runtime>::get(&ALICE),
+            AccountData {
+                free: 98,
+                reserved: 0
+            }
+        );
+
+        System::reset_events();
+        Bank::reap_accounts();
+        assert_eq!(
+            System::events()[0].event,
+            RuntimeEvent::Bank(Event::<Runtime>::Reaped { user: BOB.clone(), dust: 2 } )
+        );
+        assert_eq!(
+            Accounts::<Runtime>::get(&BOB),
+            Default::default()
+        );
+        assert_eq!(
+            Accounts::<Runtime>::get(&TreasuryAccount::get()),
+            AccountData {
+                free: 1_000_002,
+                reserved: 0
+            }
+        );
+
+        assert!(Bank::check_total_issuance());
+    });
 }
 
 #[test]

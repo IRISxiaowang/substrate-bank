@@ -20,7 +20,9 @@ mod weights;
 pub use weights::WeightInfo;
 
 /// balance information for an account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+    Encode, Decode, Copy, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo,
+)]
 pub struct AccountData<Balance> {
     pub free: Balance,
     pub reserved: Balance,
@@ -52,9 +54,9 @@ pub trait ManageRoles<AccountId> {
 }
 
 pub trait BasicAccounting<T: Config> {
-    fn deposit(user: &T::AccountId, amount: T::Balance)-> DispatchResult;
-    fn withdraw(user: &T::AccountId, amount: T::Balance)-> DispatchResult;
-    fn transfer(from:  &T::AccountId, to:  &T::AccountId, amount: T::Balance)-> DispatchResult;
+    fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult;
+    fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult;
+    fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> DispatchResult;
 }
 
 pub use module::*;
@@ -79,6 +81,12 @@ pub mod module {
             + Debug
             + From<u128>
             + sp_std::iter::Sum;
+        #[pallet::constant]    
+        type ExistentialDeposit: Get<Self::Balance>;
+        #[pallet::constant]  
+        type TreasuryAccount: Get<Self::AccountId>;
+        #[pallet::constant]  
+        type MinimumAmount: Get<Self::Balance>;
     }
 
     #[pallet::error]
@@ -89,10 +97,10 @@ pub mod module {
         AccountRoleNotRegistered,
         /// The account role does not equal to the expected role.
         IncorrectRole,
-        /// The account role does not have the correct permission.
-        UnAuthorised,
         /// The account's free balance is not sufficient.
         InsufficientBalance,
+        /// The amount given is too small.
+        AmountTooSmall,
     }
 
     #[pallet::event]
@@ -105,19 +113,30 @@ pub mod module {
         RoleUnregistered { user: T::AccountId },
 
         /// A manager role mint some fund and deposit to an account.
-        Deposit { user: T::AccountId, amount: T::Balance },
+        Deposit {
+            user: T::AccountId,
+            amount: T::Balance,
+        },
 
         /// A manager role burn some fund and withdraw from an account.
-        Withdraw { user: T::AccountId, amount: T::Balance },
+        Withdraw {
+            user: T::AccountId,
+            amount: T::Balance,
+        },
 
-        /// Burn some fund from an account.
-        Burn { user: T::AccountId, amount: T::Balance },
+        /// Transfer some fund from an account into another account.
+        Transfer {
+            from: T::AccountId,
+            to: T::AccountId,
+            amount: T::Balance,
+        },
 
-        /// Mint some fund into an account.
-        Mint { user: T::AccountId, amount: T::Balance },
+        /// Reaped some fund from an account and remove this account.
+        Reaped {
+            user: T::AccountId,
+            dust: T::Balance,
+        },
 
-        /// Mint some fund into an account.
-        Transfer { from: T::AccountId, to: T::AccountId, amount: T::Balance },
     }
 
     /// The balance of a token type under an account.
@@ -150,7 +169,8 @@ pub mod module {
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
-            let total: T::Balance = self.balances
+            let total: T::Balance = self
+                .balances
                 .iter()
                 .map(|(account_id, initial_balance)| {
                     // assert!(
@@ -162,7 +182,8 @@ pub mod module {
                         account_data.free = *initial_balance
                     });
                     *initial_balance
-                }).sum();
+                })
+                .sum();
             TotalIssuance::<T>::set(total);
         }
     }
@@ -171,7 +192,16 @@ pub mod module {
     pub struct Pallet<T>(_);
 
     #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn integrity_test() {
+            // Check if the minimum deposit is greater than or equal to the existential deposit
+            assert!(T::MinimumAmount::get() >= T::ExistentialDeposit::get());
+        }
+    
+        fn on_finalize(_block_number: BlockNumberFor<T>) {
+            Self::reap_accounts();
+        }
+    }
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
@@ -182,12 +212,12 @@ pub mod module {
         #[pallet::weight(0)]
         pub fn deposit(
             origin: OriginFor<T>,
-            user: T::AccountId, 
+            user: T::AccountId,
             #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Manager)?;
-            <Self as BasicAccounting::<T>>::deposit(&user, amount)
+            <Self as BasicAccounting<T>>::deposit(&user, amount)
         }
 
         /// Withdraw from user's account and the withdrew funds are burned.
@@ -202,7 +232,7 @@ pub mod module {
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Manager)?;
-            <Self as BasicAccounting::<T>>::withdraw(&user, amount)
+            <Self as BasicAccounting<T>>::withdraw(&user, amount)
         }
 
         /// Transfer `amount` of fund from the current user to another user.
@@ -212,11 +242,11 @@ pub mod module {
             origin: OriginFor<T>,
             to_user: T::AccountId,
             #[pallet::compact] amount: T::Balance,
-        ) -> DispatchResult{
+        ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Customer)?;
             Self::ensure_role(&to_user, Role::Customer)?;
-            <Self as BasicAccounting::<T>>::transfer(&id, &to_user, amount)
+            <Self as BasicAccounting<T>>::transfer(&id, &to_user, amount)
         }
 
         /// Register a role for a user.
@@ -294,69 +324,107 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
 
 impl<T: Config> BasicAccounting<T> for Pallet<T> {
     fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        if amount < T::MinimumAmount::get(){
+           return Err(Error::<T>::AmountTooSmall.into());
+        }
         Self::mint(&user, amount)?;
-        Self::deposit_event(Event::<T>::Deposit { user: user.clone(), amount,} );
+        Self::deposit_event(Event::<T>::Deposit {
+            user: user.clone(),
+            amount,
+        });
         Ok(())
     }
 
     fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        if amount < T::MinimumAmount::get(){
+            return Err(Error::<T>::AmountTooSmall.into());
+        }
         Self::burn(&user, amount)?;
-        Self::deposit_event(Event::<T>::Withdraw { user: user.clone(), amount,} );
+        Self::deposit_event(Event::<T>::Withdraw {
+            user: user.clone(),
+            amount,
+        });
         Ok(())
     }
-    
-    fn transfer(from:  &T::AccountId, to:  &T::AccountId, amount: T::Balance)-> DispatchResult {
-        Accounts::<T>::mutate(&from, |balance| -> DispatchResult{
+
+    fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        if amount < T::MinimumAmount::get(){
+            return Err(Error::<T>::AmountTooSmall.into());
+        }
+        Accounts::<T>::mutate(&from, |balance| -> DispatchResult {
             if balance.free >= amount {
                 balance.free -= amount;
                 Ok(())
-            }else{
+            } else {
                 Err(Error::<T>::InsufficientBalance.into())
             }
         })?;
-        Accounts::<T>::mutate(&to, |balance|{
+        Accounts::<T>::mutate(&to, |balance| {
             balance.free = balance.free.saturating_add(amount);
         });
-        Self::deposit_event(Event::Transfer { from: from.clone(), to: to.clone(), amount });
+        Self::deposit_event(Event::Transfer {
+            from: from.clone(),
+            to: to.clone(),
+            amount,
+        });
         Ok(())
     }
 }
 
 impl<T: Config> Pallet<T> {
     /// Burn some fund from a user's account.
-    fn burn(user: &T::AccountId, amount: T::Balance) -> DispatchResult{
+    fn burn(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
         Self::ensure_role(&user, Role::Customer)?;
         Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
-            if balance.free >= amount{
+            if balance.free >= amount {
                 balance.free -= amount;
                 Ok(())
-            }else{
+            } else {
                 Err(Error::<T>::InsufficientBalance.into())
             }
         })?;
-        TotalIssuance::<T>::mutate(|total|{
+        TotalIssuance::<T>::mutate(|total| {
             *total = total.saturating_sub(amount);
         });
-        Self::deposit_event(Event::Burn { user: user.clone(), amount });
         Ok(())
     }
 
     /// Mint some fund into a user's account.
-    fn mint(user: &T::AccountId, amount: T::Balance) -> DispatchResult{
+    fn mint(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
         Self::ensure_role(&user, Role::Customer)?;
 
         Accounts::<T>::mutate(&user, |balance| {
             balance.free = balance.free.saturating_add(amount);
         });
-        TotalIssuance::<T>::mutate(|total|{
+        TotalIssuance::<T>::mutate(|total| {
             *total = total.saturating_add(amount);
         });
-        Self::deposit_event(Event::Mint { user: user.clone(), amount });
         Ok(())
     }
 
     /// Integrity check: Ensure that the sum of all funds in balances matches total_issuance.
     pub(crate) fn check_total_issuance() -> bool {
-        TotalIssuance::<T>::get() == Accounts::<T>::iter().map(|(_, account)| account.free + account.reserved).sum()
+        TotalIssuance::<T>::get()
+            == Accounts::<T>::iter()
+                .map(|(_, account)| account.free + account.reserved)
+                .sum()
+    }
+
+    /// Reaps funds from accounts that have balances below the Existential Deposit (ED).
+    /// Reaped funds are transferred to the Treasury account.
+    fn reap_accounts() {
+        let treasury = T::TreasuryAccount::get();
+        let ed = T::ExistentialDeposit::get();
+
+        <Accounts<T>>::iter().for_each(|(account_id, account)| {
+            if account.free < ed {
+                let reaped_amount = account.free;
+                Accounts::<T>::mutate(&treasury, |treasury_account| {
+                    treasury_account.free = treasury_account.free.saturating_add(reaped_amount);
+                });
+                Self::deposit_event(Event::Reaped { user: account_id.clone(), dust: reaped_amount });
+                Accounts::<T>::remove(&account_id);
+            }
+        });
     }
 }
