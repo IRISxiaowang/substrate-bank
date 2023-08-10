@@ -51,6 +51,12 @@ pub trait ManageRoles<AccountId> {
     fn ensure_role(id: &AccountId, role: Role) -> DispatchResult;
 }
 
+pub trait BasicAccounting<T: Config> {
+    fn deposit(user: &T::AccountId, amount: T::Balance)-> DispatchResult;
+    fn withdraw(user: &T::AccountId, amount: T::Balance)-> DispatchResult;
+    fn transfer(from:  &T::AccountId, to:  &T::AccountId, amount: T::Balance)-> DispatchResult;
+}
+
 pub use module::*;
 
 #[frame_support::pallet]
@@ -144,17 +150,20 @@ pub mod module {
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
-            self.balances
+            let total: T::Balance = self.balances
                 .iter()
-                .for_each(|(account_id, initial_balance)| {
+                .map(|(account_id, initial_balance)| {
                     // assert!(
                     // 	*initial_balance >= T::ExistentialDeposits::get(),
                     // 	"the balance of any account should always be more than existential deposit.",
                     // );
+                    let _ = Pallet::<T>::register_role(&account_id, Role::Customer);
                     Accounts::<T>::mutate(account_id, |account_data| {
                         account_data.free = *initial_balance
                     });
-                });
+                    *initial_balance
+                }).sum();
+            TotalIssuance::<T>::set(total);
         }
     }
 
@@ -162,19 +171,7 @@ pub mod module {
     pub struct Pallet<T>(_);
 
     #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-        /// Integrity check: Ensure that the sum of all funds in balances matches total_issuance.
-        fn integrity_test() {
-            let total_issuance = TotalIssuance::<T>::get();
-
-            let actual_total = Accounts::<T>::iter().map(|(_, account)| account.free + account.reserved).sum();
-
-            assert!(
-                total_issuance == actual_total,
-                "Integrity check failed: total_issuance does not match sum of balances."
-            );
-    }
-    }
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
@@ -190,10 +187,7 @@ pub mod module {
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Manager)?;
-
-            Self::mint(&user, amount)?;
-            Self::deposit_event(Event::<T>::Deposit { user: user.clone(), amount,} );
-            Ok(())
+            <Self as BasicAccounting::<T>>::deposit(&user, amount)
         }
 
         /// Withdraw from user's account and the withdrew funds are burned.
@@ -208,10 +202,7 @@ pub mod module {
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Manager)?;
-            
-            Self::burn(&user, amount)?;
-            Self::deposit_event(Event::<T>::Withdraw { user: user.clone(), amount,} );
-            Ok(())
+            <Self as BasicAccounting::<T>>::withdraw(&user, amount)
         }
 
         /// Transfer `amount` of fund from the current user to another user.
@@ -225,20 +216,7 @@ pub mod module {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Customer)?;
             Self::ensure_role(&to_user, Role::Customer)?;
-
-            Accounts::<T>::mutate(&id, |balance| -> DispatchResult{
-                if balance.free >= amount {
-                    balance.free -= amount;
-                    Ok(())
-                }else{
-                    Err(Error::<T>::InsufficientBalance.into())
-                }
-            })?;
-            Accounts::<T>::mutate(&to_user, |balance|{
-                balance.free = balance.free.saturating_add(amount);
-            });
-            Self::deposit_event(Event::Transfer { from: id.clone(), to: to_user.clone(), amount });
-            Ok(())
+            <Self as BasicAccounting::<T>>::transfer(&id, &to_user, amount)
         }
 
         /// Register a role for a user.
@@ -314,6 +292,36 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
     }
 }
 
+impl<T: Config> BasicAccounting<T> for Pallet<T> {
+    fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        Self::mint(&user, amount)?;
+        Self::deposit_event(Event::<T>::Deposit { user: user.clone(), amount,} );
+        Ok(())
+    }
+
+    fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        Self::burn(&user, amount)?;
+        Self::deposit_event(Event::<T>::Withdraw { user: user.clone(), amount,} );
+        Ok(())
+    }
+    
+    fn transfer(from:  &T::AccountId, to:  &T::AccountId, amount: T::Balance)-> DispatchResult {
+        Accounts::<T>::mutate(&from, |balance| -> DispatchResult{
+            if balance.free >= amount {
+                balance.free -= amount;
+                Ok(())
+            }else{
+                Err(Error::<T>::InsufficientBalance.into())
+            }
+        })?;
+        Accounts::<T>::mutate(&to, |balance|{
+            balance.free = balance.free.saturating_add(amount);
+        });
+        Self::deposit_event(Event::Transfer { from: from.clone(), to: to.clone(), amount });
+        Ok(())
+    }
+}
+
 impl<T: Config> Pallet<T> {
     /// Burn some fund from a user's account.
     fn burn(user: &T::AccountId, amount: T::Balance) -> DispatchResult{
@@ -347,4 +355,8 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
+    /// Integrity check: Ensure that the sum of all funds in balances matches total_issuance.
+    pub(crate) fn check_total_issuance() -> bool {
+        TotalIssuance::<T>::get() == Accounts::<T>::iter().map(|(_, account)| account.free + account.reserved).sum()
+    }
 }
