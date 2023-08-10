@@ -53,6 +53,7 @@ pub trait ManageRoles<AccountId> {
     fn ensure_role(id: &AccountId, role: Role) -> DispatchResult;
 }
 
+/// A trait for basic accounting operations like deposit, withdrawal, and transfer.
 pub trait BasicAccounting<T: Config> {
     fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult;
     fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult;
@@ -112,26 +113,26 @@ pub mod module {
         /// A user's role is unregistered.
         RoleUnregistered { user: T::AccountId },
 
-        /// A manager role mint some fund and deposit to an account.
+        /// A manager role has minted some funds into an account.
         Deposit {
             user: T::AccountId,
             amount: T::Balance,
         },
 
-        /// A manager role burn some fund and withdraw from an account.
+        /// A manager role has burned some fund from an account.
         Withdraw {
             user: T::AccountId,
             amount: T::Balance,
         },
 
-        /// Transfer some fund from an account into another account.
+        /// Transfered some fund from an account into another account.
         Transfer {
             from: T::AccountId,
             to: T::AccountId,
             amount: T::Balance,
         },
 
-        /// Reaped some fund from an account and remove this account.
+        /// Reaped some fund from an account and removed this account.
         Reaped {
             user: T::AccountId,
             dust: T::Balance,

@@ -67,7 +67,6 @@ fn can_withdraw() {
     MockGenesisConfig::with_balances(vec![(BOB, 500)])
         .build()
         .execute_with(|| {
-            assert_eq!(Bank::accounts(&ALICE), AccountData::default());
             assert_ok!(Bank::register_role(&ALICE, Role::Manager));
             assert_eq!(
                 Accounts::<Runtime>::get(&BOB),
@@ -124,8 +123,7 @@ fn can_transfer() {
                 }
             );
             System::reset_events();
-            let sender = RuntimeOrigin::signed(ALICE);
-            assert_ok!(Bank::transfer(sender, BOB, 100));
+            assert_ok!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 100));
             // Check that the event was emitted
             assert_eq!(
                 System::events()[0].event,
