@@ -4,7 +4,7 @@
 
 use super::*;
 use frame_support::{
-    construct_runtime,
+    construct_runtime, parameter_types,
     traits::{ConstU32, ConstU64, Everything},
 };
 
@@ -17,6 +17,10 @@ pub type Balance = u128;
 
 pub const ALICE: AccountId = 1;
 pub const BOB: AccountId = 2;
+pub const TREASURY: AccountId = 0;
+pub const ED: u128 = 3u128;
+pub const MIN: u128 = 5u128;
+pub const INITIAL_BALANCE: u128 = 1_000_000u128;
 
 impl frame_system::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
@@ -44,9 +48,18 @@ impl frame_system::Config for Runtime {
     type Block = Block;
 }
 
+parameter_types! {
+    pub const ExistentialDeposit: Balance = ED;
+    pub const TreasuryAccount: AccountId = TREASURY;
+    pub const MinimumAmount: Balance = MIN;
+}
+
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
+    type ExistentialDeposit = ExistentialDeposit;
+    type TreasuryAccount = TreasuryAccount;
+    type MinimumAmount = MinimumAmount;
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -70,11 +83,11 @@ impl MockGenesisConfig {
     }
 
     pub fn build(self) -> sp_io::TestExternalities {
+        let mut endowed = self.balances;
+        endowed.push((TREASURY, INITIAL_BALANCE));
         let config = RuntimeGenesisConfig {
             system: frame_system::GenesisConfig::default(),
-            bank: crate::GenesisConfig {
-                balances: self.balances,
-            },
+            bank: crate::GenesisConfig { balances: endowed },
         };
 
         let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
