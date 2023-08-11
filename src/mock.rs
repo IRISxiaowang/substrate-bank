@@ -4,8 +4,8 @@
 
 use super::*;
 use frame_support::{
-    construct_runtime,
-    traits::{ConstU32, ConstU64, Everything}, parameter_types,
+    construct_runtime, parameter_types,
+    traits::{ConstU32, ConstU64, Everything},
 };
 
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
@@ -18,6 +18,9 @@ pub type Balance = u128;
 pub const ALICE: AccountId = 1;
 pub const BOB: AccountId = 2;
 pub const TREASURY: AccountId = 0;
+pub const ED: u128 = 3u128;
+pub const MIN: u128 = 5u128;
+pub const INITIAL_BALANCE: u128 = 1_000_000u128;
 
 impl frame_system::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
@@ -46,9 +49,9 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ExistentialDeposit: Balance = 3u128;
+    pub const ExistentialDeposit: Balance = ED;
     pub const TreasuryAccount: AccountId = TREASURY;
-    pub const MinimumAmount: Balance = 5u128;
+    pub const MinimumAmount: Balance = MIN;
 }
 
 impl Config for Runtime {
@@ -81,12 +84,10 @@ impl MockGenesisConfig {
 
     pub fn build(self) -> sp_io::TestExternalities {
         let mut endowed = self.balances;
-        endowed.push((TREASURY, 1_000_000));
+        endowed.push((TREASURY, INITIAL_BALANCE));
         let config = RuntimeGenesisConfig {
             system: frame_system::GenesisConfig::default(),
-            bank: crate::GenesisConfig {
-                balances: endowed,
-            },
+            bank: crate::GenesisConfig { balances: endowed },
         };
 
         let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

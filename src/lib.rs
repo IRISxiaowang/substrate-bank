@@ -6,6 +6,7 @@ use codec::MaxEncodedLen;
 use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
 use frame_system::pallet_prelude::*;
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::Zero;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, Saturating},
     DispatchResult,
@@ -28,7 +29,11 @@ pub struct AccountData<Balance> {
     pub reserved: Balance,
 }
 
-impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {}
+impl<Balance: Saturating + Copy> AccountData<Balance> {
+    pub fn total(&self) -> Balance {
+        self.free.saturating_add(self.reserved)
+    }
+}
 
 /// Enum representing the different roles that a user can have.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -82,11 +87,14 @@ pub mod module {
             + Debug
             + From<u128>
             + sp_std::iter::Sum;
-        #[pallet::constant]    
+
+        #[pallet::constant]
         type ExistentialDeposit: Get<Self::Balance>;
-        #[pallet::constant]  
+
+        #[pallet::constant]
         type TreasuryAccount: Get<Self::AccountId>;
-        #[pallet::constant]  
+
+        #[pallet::constant]
         type MinimumAmount: Get<Self::Balance>;
     }
 
@@ -137,7 +145,6 @@ pub mod module {
             user: T::AccountId,
             dust: T::Balance,
         },
-
     }
 
     /// The balance of a token type under an account.
@@ -198,7 +205,7 @@ pub mod module {
             // Check if the minimum deposit is greater than or equal to the existential deposit
             assert!(T::MinimumAmount::get() >= T::ExistentialDeposit::get());
         }
-    
+
         fn on_finalize(_block_number: BlockNumberFor<T>) {
             Self::reap_accounts();
         }
@@ -325,8 +332,8 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
 
 impl<T: Config> BasicAccounting<T> for Pallet<T> {
     fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount < T::MinimumAmount::get(){
-           return Err(Error::<T>::AmountTooSmall.into());
+        if amount < T::MinimumAmount::get() {
+            return Err(Error::<T>::AmountTooSmall.into());
         }
         Self::mint(&user, amount)?;
         Self::deposit_event(Event::<T>::Deposit {
@@ -337,7 +344,7 @@ impl<T: Config> BasicAccounting<T> for Pallet<T> {
     }
 
     fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount < T::MinimumAmount::get(){
+        if amount < T::MinimumAmount::get() {
             return Err(Error::<T>::AmountTooSmall.into());
         }
         Self::burn(&user, amount)?;
@@ -349,7 +356,7 @@ impl<T: Config> BasicAccounting<T> for Pallet<T> {
     }
 
     fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        if amount < T::MinimumAmount::get(){
+        if amount < T::MinimumAmount::get() {
             return Err(Error::<T>::AmountTooSmall.into());
         }
         Accounts::<T>::mutate(&from, |balance| -> DispatchResult {
@@ -414,18 +421,22 @@ impl<T: Config> Pallet<T> {
     /// Reaps funds from accounts that have balances below the Existential Deposit (ED).
     /// Reaped funds are transferred to the Treasury account.
     fn reap_accounts() {
-        let treasury = T::TreasuryAccount::get();
-        let ed = T::ExistentialDeposit::get();
-
-        <Accounts<T>>::iter().for_each(|(account_id, account)| {
-            if account.free < ed {
-                let reaped_amount = account.free;
-                Accounts::<T>::mutate(&treasury, |treasury_account| {
-                    treasury_account.free = treasury_account.free.saturating_add(reaped_amount);
+        let total_reaped_amount = Accounts::<T>::iter()
+            .filter(|(_id, balance)| balance.total() < T::ExistentialDeposit::get())
+            .map(|(id, balance)| {
+                Self::deposit_event(Event::Reaped {
+                    user: id.clone(),
+                    dust: balance.total(),
                 });
-                Self::deposit_event(Event::Reaped { user: account_id.clone(), dust: reaped_amount });
-                Accounts::<T>::remove(&account_id);
-            }
-        });
+                Accounts::<T>::remove(&id);
+                balance.total()
+            })
+            .sum();
+
+        if total_reaped_amount > Zero::zero() {
+            Accounts::<T>::mutate(&T::TreasuryAccount::get(), |treasury_account| {
+                treasury_account.free += total_reaped_amount;
+            });
+        }
     }
 }

@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::mock::{
-    default_test_ext, Bank, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin, System, ALICE,
-    BOB, TreasuryAccount,
+    default_test_ext, AccountId, Bank, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin,
+    System, TreasuryAccount, ALICE, BOB,
 };
 use crate::AccountData;
 use frame_support::{assert_noop, assert_ok};
@@ -108,20 +108,6 @@ fn can_transfer() {
     MockGenesisConfig::with_balances(vec![(ALICE, 1_000), (BOB, 500)])
         .build()
         .execute_with(|| {
-            assert_eq!(
-                Accounts::<Runtime>::get(&ALICE),
-                AccountData {
-                    free: 1_000,
-                    reserved: 0
-                }
-            );
-            assert_eq!(
-                Accounts::<Runtime>::get(&BOB),
-                AccountData {
-                    free: 500,
-                    reserved: 0
-                }
-            );
             System::reset_events();
             assert_ok!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 100));
             // Check that the event was emitted
@@ -163,20 +149,43 @@ fn can_transfer() {
 }
 
 #[test]
-fn can_reaped() {
+fn cannot_dealwith_smaller_than_min() {
     default_test_ext().execute_with(|| {
+        let charlie: AccountId = 3u32;
         assert_eq!(Bank::accounts(&ALICE), AccountData::default());
         assert_eq!(Bank::accounts(&BOB), AccountData::default());
-        assert_eq!(Bank::accounts(&3), AccountData::default());
+        assert_eq!(Bank::accounts(&charlie), AccountData::default());
         assert_ok!(Bank::register_role(&ALICE, Role::Customer));
         assert_ok!(Bank::register_role(&BOB, Role::Customer));
-        assert_ok!(Bank::register_role(&3, Role::Manager));
-        
-        assert_noop!(Bank::deposit(RuntimeOrigin::signed(3), BOB, 4), Error::<Runtime>::AmountTooSmall);
-        assert_noop!(Bank::withdraw(RuntimeOrigin::signed(3), BOB, 4), Error::<Runtime>::AmountTooSmall);
-        assert_noop!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 4), Error::<Runtime>::AmountTooSmall);
-        
-        assert_ok!(Bank::deposit(RuntimeOrigin::signed(3), BOB, 100));
+        assert_ok!(Bank::register_role(&charlie, Role::Manager));
+
+        assert_noop!(
+            Bank::deposit(RuntimeOrigin::signed(charlie), BOB, 4),
+            Error::<Runtime>::AmountTooSmall
+        );
+        assert_noop!(
+            Bank::withdraw(RuntimeOrigin::signed(charlie), BOB, 4),
+            Error::<Runtime>::AmountTooSmall
+        );
+        assert_noop!(
+            Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 4),
+            Error::<Runtime>::AmountTooSmall
+        );
+    });
+}
+
+#[test]
+fn can_reaped() {
+    default_test_ext().execute_with(|| {
+        let charlie: AccountId = 3u32;
+        assert_eq!(Bank::accounts(&ALICE), AccountData::default());
+        assert_eq!(Bank::accounts(&BOB), AccountData::default());
+        assert_eq!(Bank::accounts(&charlie), AccountData::default());
+        assert_ok!(Bank::register_role(&ALICE, Role::Customer));
+        assert_ok!(Bank::register_role(&BOB, Role::Customer));
+        assert_ok!(Bank::register_role(&charlie, Role::Manager));
+
+        assert_ok!(Bank::deposit(RuntimeOrigin::signed(charlie), BOB, 100));
         assert_eq!(
             Accounts::<Runtime>::get(&BOB),
             AccountData {
@@ -204,12 +213,12 @@ fn can_reaped() {
         Bank::reap_accounts();
         assert_eq!(
             System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Reaped { user: BOB.clone(), dust: 2 } )
+            RuntimeEvent::Bank(Event::<Runtime>::Reaped {
+                user: BOB.clone(),
+                dust: 2
+            })
         );
-        assert_eq!(
-            Accounts::<Runtime>::get(&BOB),
-            Default::default()
-        );
+        assert_eq!(Accounts::<Runtime>::get(&BOB), Default::default());
         assert_eq!(
             Accounts::<Runtime>::get(&TreasuryAccount::get()),
             AccountData {
