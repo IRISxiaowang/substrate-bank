@@ -24,6 +24,8 @@ traits = { path = "../../traits", default-features = false }
 [dev-dependencies]
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 
+pallet-roles = { path = "../pallet-roles"}
+
 [features]
 default = ["std"]
 std = [

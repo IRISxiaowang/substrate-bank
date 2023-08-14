@@ -14,7 +14,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 
 use primitives::Role;
-use traits::{ManageRoles, BasicAccounting};
+use traits::{BasicAccounting, ManageRoles};
 
 mod mock;
 mod tests;
@@ -61,6 +61,8 @@ pub mod module {
             + From<u128>
             + sp_std::iter::Sum;
 
+        type RoleManager: ManageRoles<Self::AccountId>;
+
         #[pallet::constant]
         type ExistentialDeposit: Get<Self::Balance>;
 
@@ -73,12 +75,6 @@ pub mod module {
 
     #[pallet::error]
     pub enum Error<T> {
-        /// The account role cannot be changed, you must unregister first.
-        AccountAleadyRegistered,
-        /// The account hasn't registered a role.
-        AccountRoleNotRegistered,
-        /// The account role does not equal to the expected role.
-        IncorrectRole,
         /// The account's free balance is not sufficient.
         InsufficientBalance,
         /// The amount given is too small.
@@ -88,12 +84,6 @@ pub mod module {
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// A user has registered a role
-        RoleRegistered { user: T::AccountId, role: Role },
-
-        /// A user's role is unregistered.
-        RoleUnregistered { user: T::AccountId },
-
         /// A manager role has minted some funds into an account.
         Deposit {
             user: T::AccountId,
@@ -127,10 +117,6 @@ pub mod module {
         StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
 
     #[pallet::storage]
-    #[pallet::getter(fn account_roles)]
-    pub type AccountRoles<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Role>;
-
-    #[pallet::storage]
     #[pallet::getter(fn total_issuance)]
     /// Storage item to track the total issuance of the token.
     pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
@@ -158,7 +144,7 @@ pub mod module {
                     // 	*initial_balance >= T::ExistentialDeposits::get(),
                     // 	"the balance of any account should always be more than existential deposit.",
                     // );
-                    let _ = Pallet::<T>::register_role(&account_id, Role::Customer);
+                    let _ = T::RoleManager::register_role(&account_id, Role::Customer);
                     Accounts::<T>::mutate(account_id, |account_data| {
                         account_data.free = *initial_balance
                     });
@@ -197,7 +183,7 @@ pub mod module {
             #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
-            Self::ensure_role(&id, Role::Manager)?;
+            T::RoleManager::ensure_role(&id, Role::Manager)?;
             <Self as BasicAccounting<T::AccountId, T::Balance>>::deposit(&user, amount)
         }
 
@@ -212,7 +198,7 @@ pub mod module {
             #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
-            Self::ensure_role(&id, Role::Manager)?;
+            T::RoleManager::ensure_role(&id, Role::Manager)?;
             <Self as BasicAccounting<T::AccountId, T::Balance>>::withdraw(&user, amount)
         }
 
@@ -225,80 +211,9 @@ pub mod module {
             #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
-            Self::ensure_role(&id, Role::Customer)?;
-            Self::ensure_role(&to_user, Role::Customer)?;
+            T::RoleManager::ensure_role(&id, Role::Customer)?;
+            T::RoleManager::ensure_role(&to_user, Role::Customer)?;
             <Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(&id, &to_user, amount)
-        }
-
-        /// Register a role for a user.
-        ///
-        /// This function allows a user to be registered with a specific role.
-        /// The user must be signed and authenticated.
-        ///
-        /// Params:
-        /// - `role`: The role to assign to the user.
-        #[pallet::call_index(3)]
-        #[pallet::weight(0)]
-        pub fn register(origin: OriginFor<T>, role: Role) -> DispatchResult {
-            let id = ensure_signed(origin)?;
-            Self::register_role(&id, role)
-        }
-
-        /// Unregister a role for a user.
-        ///
-        /// This function allows a user's role to be unregistered.
-        /// The user must be signed and authenticated.
-        #[pallet::call_index(4)]
-        #[pallet::weight(0)]
-        pub fn unregister(origin: OriginFor<T>) -> DispatchResult {
-            let id = ensure_signed(origin)?;
-            Self::unregister_role(&id)
-        }
-    }
-}
-
-impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
-    /// Get the role of a given user.
-    fn role(id: &T::AccountId) -> Option<Role> {
-        AccountRoles::<T>::get(id)
-    }
-
-    /// Register a role for a user, insert the user's role into storage and emit a role_registered event.
-    fn register_role(id: &T::AccountId, role: Role) -> DispatchResult {
-        ensure!(
-            AccountRoles::<T>::get(id).is_none(),
-            Error::<T>::AccountAleadyRegistered
-        );
-        AccountRoles::<T>::insert(id, role);
-        Self::deposit_event(Event::<T>::RoleRegistered {
-            user: id.clone(),
-            role,
-        });
-        Ok(())
-    }
-
-    /// Unregister a role for a user, remove the user's role from storage and emit a role unregistered event.
-    fn unregister_role(id: &T::AccountId) -> DispatchResult {
-        ensure!(
-            AccountRoles::<T>::get(id).is_some(),
-            Error::<T>::AccountRoleNotRegistered
-        );
-        AccountRoles::<T>::remove(id);
-        Self::deposit_event(Event::<T>::RoleUnregistered { user: id.clone() });
-        Ok(())
-    }
-
-    /// Ensure that a user has a specific role.
-    fn ensure_role(id: &T::AccountId, role: Role) -> DispatchResult {
-        match AccountRoles::<T>::get(id) {
-            Some(r) => {
-                if r != role {
-                    Err(Error::<T>::IncorrectRole.into())
-                } else {
-                    Ok(())
-                }
-            }
-            None => Err(Error::<T>::AccountRoleNotRegistered.into()),
         }
     }
 }
@@ -355,7 +270,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 impl<T: Config> Pallet<T> {
     /// Burn some fund from a user's account.
     fn burn(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        Self::ensure_role(&user, Role::Customer)?;
+        T::RoleManager::ensure_role(&user, Role::Customer)?;
         Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
             if balance.free >= amount {
                 balance.free -= amount;
@@ -372,7 +287,7 @@ impl<T: Config> Pallet<T> {
 
     /// Mint some fund into a user's account.
     fn mint(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        Self::ensure_role(&user, Role::Customer)?;
+        T::RoleManager::ensure_role(&user, Role::Customer)?;
 
         Accounts::<T>::mutate(&user, |balance| {
             balance.free = balance.free.saturating_add(amount);

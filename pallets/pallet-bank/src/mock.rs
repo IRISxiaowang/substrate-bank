@@ -60,6 +60,11 @@ impl Config for Runtime {
     type ExistentialDeposit = ExistentialDeposit;
     type TreasuryAccount = TreasuryAccount;
     type MinimumAmount = MinimumAmount;
+    type RoleManager = Roles;
+}
+
+impl pallet_roles::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -69,6 +74,7 @@ construct_runtime!(
     {
         System: frame_system,
         Bank: pallet_bank,
+        Roles: pallet_roles,
     }
 );
 
@@ -85,9 +91,14 @@ impl MockGenesisConfig {
     pub fn build(self) -> sp_io::TestExternalities {
         let mut endowed = self.balances;
         endowed.push((TREASURY, INITIAL_BALANCE));
+        let roles = endowed
+            .iter()
+            .map(|(id, _)| (*id, Role::Customer))
+            .collect();
         let config = RuntimeGenesisConfig {
             system: frame_system::GenesisConfig::default(),
             bank: crate::GenesisConfig { balances: endowed },
+            roles: pallet_roles::GenesisConfig { roles },
         };
 
         let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
