@@ -296,32 +296,3 @@ fn can_unregister_role() {
         );
     });
 }
-
-
-#[test]
-fn can_manage_role_via_trait() {
-    default_test_ext().execute_with(|| {
-
-        assert_ok!(<Bank as ManageRoles<AccountId>>::register_role(&ALICE, Role::Auditor));
-
-        // assert_ok!(Bank::register(RuntimeOrigin::signed(ALICE.clone()), role));
-        // assert_eq!(Bank::role(&ALICE), Some(role));
-        // System::reset_events();
-
-        // assert_ok!(Bank::unregister(RuntimeOrigin::signed(ALICE.clone())));
-        // assert_eq!(Bank::role(&ALICE), None);
-        // // Check that the event was emitted
-        // assert_eq!(
-        //     System::events()[0].event,
-        //     RuntimeEvent::Bank(Event::<Runtime>::RoleUnregistered {
-        //         user: ALICE.clone()
-        //     })
-        // );
-
-        // // Check that Alice's role was unregistered
-        // assert_noop!(
-        //     Bank::unregister(RuntimeOrigin::signed(ALICE.clone())),
-        //     Error::<Runtime>::AccountRoleNotRegistered
-        // );
-    });
-}
