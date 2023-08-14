@@ -3,8 +3,8 @@
 #![cfg(test)]
 
 use crate::mock::{
-    default_test_ext, AccountId, Bank, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin,
-    System, TreasuryAccount, ALICE, BOB, Roles,
+    default_test_ext, AccountId, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
+    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB,
 };
 use crate::*;
 use frame_support::{assert_noop, assert_ok};

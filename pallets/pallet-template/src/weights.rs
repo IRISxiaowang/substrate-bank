@@ -8,12 +8,12 @@ use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 pub trait WeightInfo {
-	fn deposit() -> Weight;
+	fn example_extrinsic() -> Weight;
 }
 
 /// Default weights.
 impl WeightInfo for () {
-	fn deposit() -> Weight {
-		Weight::from_parts(1, 0)
+	fn example_extrinsic() -> Weight {
+		Weight::from_parts(1_000_000, 0)
 	}
 }
