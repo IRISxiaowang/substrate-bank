@@ -1,0 +1,17 @@
+[package]
+name = "traits"
+version = "0.1.0"
+edition = "2021"
+description = "Contains traits shared across the code base."
+
+[dependencies]
+sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
+
+primitives = { path = "../primitives", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+    "sp-runtime/std",
+    "primitives/std",
+]

@@ -13,6 +13,9 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 
+use primitives::Role;
+use traits::{ManageRoles, BasicAccounting};
+
 mod mock;
 mod tests;
 
@@ -33,36 +36,6 @@ impl<Balance: Saturating + Copy> AccountData<Balance> {
     pub fn total(&self) -> Balance {
         self.free.saturating_add(self.reserved)
     }
-}
-
-/// Enum representing the different roles that a user can have.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub enum Role {
-    /// Represents a regular customer role.
-    Customer,
-    /// Represents a manager role with higher privileges.
-    Manager,
-    /// Represents an auditor role responsible for auditing.
-    Auditor,
-}
-
-/// Trait for managing user roles.
-pub trait ManageRoles<AccountId> {
-    /// Get the role of a given user.
-    fn role(id: &AccountId) -> Option<Role>;
-    /// Register a role for a user.
-    fn register_role(id: &AccountId, role: Role) -> DispatchResult;
-    /// Unregister a role for a user.
-    fn unregister_role(id: &AccountId) -> DispatchResult;
-    /// Ensure that a user has a specific role.
-    fn ensure_role(id: &AccountId, role: Role) -> DispatchResult;
-}
-
-/// A trait for basic accounting operations like deposit, withdrawal, and transfer.
-pub trait BasicAccounting<T: Config> {
-    fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult;
-    fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult;
-    fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> DispatchResult;
 }
 
 pub use module::*;
@@ -225,7 +198,7 @@ pub mod module {
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Manager)?;
-            <Self as BasicAccounting<T>>::deposit(&user, amount)
+            <Self as BasicAccounting<T::AccountId, T::Balance>>::deposit(&user, amount)
         }
 
         /// Withdraw from user's account and the withdrew funds are burned.
@@ -240,7 +213,7 @@ pub mod module {
         ) -> DispatchResult {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Manager)?;
-            <Self as BasicAccounting<T>>::withdraw(&user, amount)
+            <Self as BasicAccounting<T::AccountId, T::Balance>>::withdraw(&user, amount)
         }
 
         /// Transfer `amount` of fund from the current user to another user.
@@ -254,7 +227,7 @@ pub mod module {
             let id = ensure_signed(origin)?;
             Self::ensure_role(&id, Role::Customer)?;
             Self::ensure_role(&to_user, Role::Customer)?;
-            <Self as BasicAccounting<T>>::transfer(&id, &to_user, amount)
+            <Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(&id, &to_user, amount)
         }
 
         /// Register a role for a user.
@@ -330,7 +303,7 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
     }
 }
 
-impl<T: Config> BasicAccounting<T> for Pallet<T> {
+impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
     fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
         if amount < T::MinimumAmount::get() {
             return Err(Error::<T>::AmountTooSmall.into());
@@ -410,8 +383,9 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
+    #[cfg(test)]
     /// Integrity check: Ensure that the sum of all funds in balances matches total_issuance.
-    pub(crate) fn check_total_issuance() -> bool {
+    fn check_total_issuance() -> bool {
         TotalIssuance::<T>::get()
             == Accounts::<T>::iter()
                 .map(|(_, account)| account.free + account.reserved)

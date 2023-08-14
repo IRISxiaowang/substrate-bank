@@ -2,12 +2,11 @@
 
 #![cfg(test)]
 
-use super::*;
 use crate::mock::{
     default_test_ext, AccountId, Bank, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin,
     System, TreasuryAccount, ALICE, BOB,
 };
-use crate::AccountData;
+use crate::*;
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
