@@ -1,5 +1,3 @@
-//! Unit tests for the tokens module.
-
 #![cfg(test)]
 
 use crate::mock::{default_test_ext, Runtime, ALICE};

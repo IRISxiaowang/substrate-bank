@@ -1,5 +1,3 @@
-//! Mocks for the tokens module.
-
 #![cfg(test)]
 
 use super::*;

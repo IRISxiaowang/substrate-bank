@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //!
-//! This crate contains basic primitive types used within the blockchain codebase.
+//! This crate contains traits shared across the codebase.
 //!
 
 use sp_runtime::DispatchResult;

@@ -1,5 +1,3 @@
-//! Mocks for the template module.
-
 #![cfg(test)]
 
 use super::*;
