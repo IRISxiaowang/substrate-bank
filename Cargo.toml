@@ -6,6 +6,8 @@ edition = "2021"
 [workspace]
 members = [
 	"pallets/pallet-bank",
+	"pallets/pallet-template",
+	"pallets/pallet-roles",
 	"primitives",
 	"traits",
 ]

@@ -1,20 +1,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //!
 //! This crate contains basic primitive types used within the blockchain codebase.
-//! 
+//!
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_runtime::{
-	generic,
-	traits::{IdentifyAccount, Verify},
-	MultiSignature,
+    generic,
+    traits::{IdentifyAccount, Verify},
+    MultiSignature,
 };
 use sp_std::prelude::*;
-use frame_support::RuntimeDebug;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 
 /// Enum representing the different roles that a user can have.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum Role {
     /// Represents a regular customer role.

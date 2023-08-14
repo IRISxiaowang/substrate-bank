@@ -3,8 +3,8 @@
 #![cfg(test)]
 
 use crate::mock::{
-    default_test_ext, AccountId, Bank, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin,
-    System, TreasuryAccount, ALICE, BOB,
+    default_test_ext, AccountId, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
+    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB,
 };
 use crate::*;
 use frame_support::{assert_noop, assert_ok};
@@ -14,8 +14,8 @@ fn can_deposit() {
     default_test_ext().execute_with(|| {
         assert_eq!(Bank::accounts(&ALICE), AccountData::default());
         assert_eq!(Bank::accounts(&BOB), AccountData::default());
-        assert_ok!(Bank::register_role(&ALICE, Role::Manager));
-        assert_ok!(Bank::register_role(&BOB, Role::Customer));
+        assert_ok!(Roles::register_role(&ALICE, Role::Manager));
+        assert_ok!(Roles::register_role(&BOB, Role::Customer));
         System::reset_events();
         let sender = RuntimeOrigin::signed(ALICE);
         assert_ok!(Bank::deposit(sender, BOB, 1_000));
@@ -36,7 +36,7 @@ fn can_deposit() {
         );
         assert_noop!(
             Bank::deposit(RuntimeOrigin::signed(ALICE), ALICE, 500),
-            Error::<Runtime>::IncorrectRole
+            pallet_roles::Error::<Runtime>::IncorrectRole
         );
         assert!(Bank::check_total_issuance());
     });
@@ -66,7 +66,7 @@ fn can_withdraw() {
     MockGenesisConfig::with_balances(vec![(BOB, 500)])
         .build()
         .execute_with(|| {
-            assert_ok!(Bank::register_role(&ALICE, Role::Manager));
+            assert_ok!(Roles::register_role(&ALICE, Role::Manager));
             assert_eq!(
                 Accounts::<Runtime>::get(&BOB),
                 AccountData {
@@ -96,7 +96,7 @@ fn can_withdraw() {
             );
             assert_noop!(
                 Bank::withdraw(RuntimeOrigin::signed(ALICE), ALICE, 500),
-                Error::<Runtime>::IncorrectRole
+                pallet_roles::Error::<Runtime>::IncorrectRole
             );
             assert!(Bank::check_total_issuance());
         });
@@ -138,10 +138,10 @@ fn can_transfer() {
                 Error::<Runtime>::InsufficientBalance
             );
             assert_eq!(Bank::accounts(3), AccountData::default());
-            assert_ok!(Bank::register_role(&3, Role::Manager));
+            assert_ok!(Roles::register_role(&3, Role::Manager));
             assert_noop!(
                 Bank::transfer(RuntimeOrigin::signed(3), BOB, 100),
-                Error::<Runtime>::IncorrectRole
+                pallet_roles::Error::<Runtime>::IncorrectRole
             );
             assert!(Bank::check_total_issuance());
         });
@@ -154,9 +154,9 @@ fn cannot_dealwith_smaller_than_min() {
         assert_eq!(Bank::accounts(&ALICE), AccountData::default());
         assert_eq!(Bank::accounts(&BOB), AccountData::default());
         assert_eq!(Bank::accounts(&charlie), AccountData::default());
-        assert_ok!(Bank::register_role(&ALICE, Role::Customer));
-        assert_ok!(Bank::register_role(&BOB, Role::Customer));
-        assert_ok!(Bank::register_role(&charlie, Role::Manager));
+        assert_ok!(Roles::register_role(&ALICE, Role::Customer));
+        assert_ok!(Roles::register_role(&BOB, Role::Customer));
+        assert_ok!(Roles::register_role(&charlie, Role::Manager));
 
         assert_noop!(
             Bank::deposit(RuntimeOrigin::signed(charlie), BOB, 4),
@@ -180,9 +180,9 @@ fn can_reaped() {
         assert_eq!(Bank::accounts(&ALICE), AccountData::default());
         assert_eq!(Bank::accounts(&BOB), AccountData::default());
         assert_eq!(Bank::accounts(&charlie), AccountData::default());
-        assert_ok!(Bank::register_role(&ALICE, Role::Customer));
-        assert_ok!(Bank::register_role(&BOB, Role::Customer));
-        assert_ok!(Bank::register_role(&charlie, Role::Manager));
+        assert_ok!(Roles::register_role(&ALICE, Role::Customer));
+        assert_ok!(Roles::register_role(&BOB, Role::Customer));
+        assert_ok!(Roles::register_role(&charlie, Role::Manager));
 
         assert_ok!(Bank::deposit(RuntimeOrigin::signed(charlie), BOB, 100));
         assert_eq!(
@@ -227,72 +227,5 @@ fn can_reaped() {
         );
 
         assert!(Bank::check_total_issuance());
-    });
-}
-
-#[test]
-fn can_register_role() {
-    default_test_ext().execute_with(|| {
-        let role = Role::Customer;
-        assert_eq!(None, AccountRoles::<Runtime>::get(&ALICE));
-
-        // Register Alice with the role
-        assert_ok!(Bank::register(RuntimeOrigin::signed(ALICE.clone()), role));
-
-        // Check that the event was emitted
-        assert_eq!(
-            System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::RoleRegistered {
-                user: ALICE.clone(),
-                role
-            })
-        );
-
-        // Check that Alice's role was registered
-        assert_eq!(Bank::role(&ALICE), Some(role));
-    });
-}
-
-#[test]
-fn cannot_reregister_role() {
-    default_test_ext().execute_with(|| {
-        let role = Role::Customer;
-        // Register Alice with the role
-        assert_ok!(Bank::register(RuntimeOrigin::signed(ALICE.clone()), role));
-        System::reset_events();
-
-        // Try to register again
-        assert_noop!(
-            Bank::register(RuntimeOrigin::signed(ALICE.clone()), Role::Auditor),
-            Error::<Runtime>::AccountAleadyRegistered
-        );
-        assert_eq!(Bank::role(&ALICE), Some(role));
-        assert!(System::events().is_empty());
-    });
-}
-
-#[test]
-fn can_unregister_role() {
-    default_test_ext().execute_with(|| {
-        let role = Role::Customer;
-        assert_ok!(Bank::register(RuntimeOrigin::signed(ALICE.clone()), role));
-        assert_eq!(Bank::role(&ALICE), Some(role));
-        System::reset_events();
-
-        assert_ok!(Bank::unregister(RuntimeOrigin::signed(ALICE.clone())));
-        assert_eq!(Bank::role(&ALICE), None);
-        // Check that the event was emitted
-        assert_eq!(
-            System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::RoleUnregistered {
-                user: ALICE.clone()
-            })
-        );
-
-        // Check that Alice's role was unregistered
-        assert_noop!(
-            Bank::unregister(RuntimeOrigin::signed(ALICE.clone())),
-            Error::<Runtime>::AccountRoleNotRegistered
-        );
     });
 }

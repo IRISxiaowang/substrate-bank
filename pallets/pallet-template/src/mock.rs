@@ -1,5 +1,3 @@
-//! Mocks for the tokens module.
-
 #![cfg(test)]
 
 use super::*;
@@ -10,17 +8,11 @@ use frame_support::{
 
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
-use crate as pallet_bank;
+use crate as pallet_template;
 
 pub type AccountId = u32;
-pub type Balance = u128;
 
 pub const ALICE: AccountId = 1;
-pub const BOB: AccountId = 2;
-pub const TREASURY: AccountId = 0;
-pub const ED: u128 = 3u128;
-pub const MIN: u128 = 5u128;
-pub const INITIAL_BALANCE: u128 = 1_000_000u128;
 
 impl frame_system::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
@@ -48,23 +40,12 @@ impl frame_system::Config for Runtime {
     type Block = Block;
 }
 
-parameter_types! {
-    pub const ExistentialDeposit: Balance = ED;
-    pub const TreasuryAccount: AccountId = TREASURY;
-    pub const MinimumAmount: Balance = MIN;
-}
+parameter_types! {}
 
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type Balance = Balance;
-    type ExistentialDeposit = ExistentialDeposit;
-    type TreasuryAccount = TreasuryAccount;
-    type MinimumAmount = MinimumAmount;
-    type RoleManager = Roles;
-}
 
-impl pallet_roles::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -73,32 +54,18 @@ construct_runtime!(
     pub enum Runtime
     {
         System: frame_system,
-        Bank: pallet_bank,
-        Roles: pallet_roles,
+        Template: pallet_template,
     }
 );
 
 #[derive(Default)]
-pub struct MockGenesisConfig {
-    balances: Vec<(AccountId, Balance)>,
-}
+pub struct MockGenesisConfig;
 
 impl MockGenesisConfig {
-    pub fn with_balances(balances: Vec<(AccountId, Balance)>) -> Self {
-        Self { balances }
-    }
-
     pub fn build(self) -> sp_io::TestExternalities {
-        let mut endowed = self.balances;
-        endowed.push((TREASURY, INITIAL_BALANCE));
-        let roles = endowed
-            .iter()
-            .map(|(id, _)| (*id, Role::Customer))
-            .collect();
         let config = RuntimeGenesisConfig {
             system: frame_system::GenesisConfig::default(),
-            bank: crate::GenesisConfig { balances: endowed },
-            roles: pallet_roles::GenesisConfig { roles },
+            template: crate::GenesisConfig::default(),
         };
 
         let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
