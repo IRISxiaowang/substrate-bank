@@ -25,3 +25,9 @@ pub trait BasicAccounting<AccountId, Balance> {
     fn withdraw(user: &AccountId, amount: Balance) -> DispatchResult;
     fn transfer(from: &AccountId, to: &AccountId, amount: Balance) -> DispatchResult;
 }
+
+/// A trait for stake and redeem funds.
+pub trait Stakable<AccountId, Balance> {
+    fn stake_funds(user: &AccountId, amount: Balance) -> DispatchResult;
+    fn redeem_funds(user: &AccountId, amount: Balance) -> DispatchResult;
+}

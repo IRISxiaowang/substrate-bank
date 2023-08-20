@@ -21,6 +21,7 @@ pub const TREASURY: AccountId = 0;
 pub const ED: u128 = 3u128;
 pub const MIN: u128 = 5u128;
 pub const INITIAL_BALANCE: u128 = 1_000_000u128;
+pub const REDEEM_PERIOD: u64 = 10;
 
 impl frame_system::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
@@ -52,15 +53,18 @@ parameter_types! {
     pub const ExistentialDeposit: Balance = ED;
     pub const TreasuryAccount: AccountId = TREASURY;
     pub const MinimumAmount: Balance = MIN;
+    pub const RedeemPeriod: BlockNumberFor<Runtime> = REDEEM_PERIOD;
 }
 
 impl Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
+    type RoleManager = Roles;
+    type BlockNumberProvider = System;
     type ExistentialDeposit = ExistentialDeposit;
     type TreasuryAccount = TreasuryAccount;
     type MinimumAmount = MinimumAmount;
-    type RoleManager = Roles;
+    type RedeemPeriod = RedeemPeriod;
 }
 
 impl pallet_roles::Config for Runtime {
