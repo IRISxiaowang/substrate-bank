@@ -95,6 +95,7 @@ impl MockGenesisConfig {
     pub fn build(self) -> sp_io::TestExternalities {
         let mut endowed = self.balances;
         endowed.push((TREASURY, INITIAL_BALANCE));
+
         let roles = endowed
             .iter()
             .map(|(id, _)| (*id, Role::Customer))

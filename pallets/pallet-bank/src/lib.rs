@@ -3,10 +3,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::MaxEncodedLen;
-use frame_support::{
-    pallet_prelude::*,
-    traits::{tokens::Balance, BuildGenesisConfig},
-};
+use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
 use frame_system::pallet_prelude::*;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Zero;
@@ -14,7 +11,7 @@ use sp_runtime::{
     traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
     DispatchResult,
 };
-use sp_std::{fmt::Debug, prelude::*, vec::Vec, cmp::min};
+use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
 use primitives::{LockId, Role};
 use traits::{BasicAccounting, ManageRoles, Stakable};
@@ -29,6 +26,12 @@ pub use weights::WeightInfo;
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum LockReason {
     Redeem,
+    Auditor,
+}
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum UnlockReason {
+    Expired,
     Auditor,
 }
 
@@ -50,7 +53,7 @@ pub struct AccountData<Balance> {
 
 impl<Balance: Saturating + Copy + sp_std::iter::Sum> AccountData<Balance> {
     pub fn total(&self) -> Balance {
-         self.free
+        self.free
             .saturating_add(self.reserved)
             .saturating_add(self.locked.iter().map(|l| l.amount).sum())
     }
@@ -103,25 +106,27 @@ pub mod module {
         InsufficientBalance,
         /// The amount given is too small.
         AmountTooSmall,
+        /// Unlock reason is not compatible with the lock.
+        UnauthorisedUnlock,
     }
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
     pub enum Event<T: Config> {
         /// A manager role has minted some funds into an account.
-        Deposit {
+        Deposited {
             user: T::AccountId,
             amount: T::Balance,
         },
 
         /// A manager role has burned some fund from an account.
-        Withdraw {
+        Withdrew {
             user: T::AccountId,
             amount: T::Balance,
         },
 
         /// Transfered some fund from an account into another account.
-        Transfer {
+        Transferred {
             from: T::AccountId,
             to: T::AccountId,
             amount: T::Balance,
@@ -133,35 +138,30 @@ pub mod module {
             dust: T::Balance,
         },
 
-        /// Stake some fund from an account's "free" to "reserved".
-        Stake {
+        /// Staked some fund from an account's "free" to "reserved".
+        Staked {
             user: T::AccountId,
             amount: T::Balance,
         },
 
-        /// Redeem some fund from an account's "reserved" to "locked".
-        Redeem {
+        /// Redeemed some fund from an account's "reserved" to "locked".
+        Redeemed {
             user: T::AccountId,
             amount: T::Balance,
         },
 
-        /// Auditor lock some fund from an account's "free" and "reserved" to "locked".
-        AuditorLock {
+        /// Auditor locked some fund from an account's "free" and "reserved" to "locked".
+        AuditorLocked {
             user: T::AccountId,
             amount: T::Balance,
             length: BlockNumberFor<T>,
         },
 
-        /// Auditor unlock some fund from a user who was locked the fund by an auditor role.
-        AuditorUnlock {
+        /// Unlocked some fund from an account's "locked" to "free".
+        Unlocked {
             user: T::AccountId,
             amount: T::Balance,
-        },
-
-        /// Unlock some fund from an account's "locked" to "free".
-        UnLock {
-            user: T::AccountId,
-            amount: T::Balance,
+            reason: UnlockReason,
         },
     }
 
@@ -204,10 +204,10 @@ pub mod module {
                 .balances
                 .iter()
                 .map(|(account_id, initial_balance)| {
-                    // assert!(
-                    // 	*initial_balance >= T::ExistentialDeposits::get(),
-                    // 	"the balance of any account should always be more than existential deposit.",
-                    // );
+                    assert!(
+                    	*initial_balance >= T::ExistentialDeposit::get(),
+                    	"the balance of any account should always be more than existential deposit.",
+                    );
                     let _ = T::RoleManager::register_role(&account_id, Role::Customer);
                     Accounts::<T>::mutate(account_id, |account_data| {
                         account_data.free = *initial_balance
@@ -230,11 +230,16 @@ pub mod module {
             assert!(T::MinimumAmount::get() >= T::ExistentialDeposit::get());
         }
 
-        fn on_finalize(_block_number: BlockNumberFor<T>) {
+        fn on_finalize(block_number: BlockNumberFor<T>) {
+            // Reap accounts below ED
             Self::reap_accounts();
-            AccountWithUnlockedFund::<T>::take(&_block_number).iter().for_each(|(user, lock_id)|{
-                Self::unlock(user, *lock_id);
-            });
+
+            // Unlock funds that are due.
+            AccountWithUnlockedFund::<T>::take(&block_number)
+                .into_iter()
+                .for_each(|(user, lock_id)| {
+                    let _ = Self::unlock(&user, lock_id, UnlockReason::Expired);
+                });
         }
     }
 
@@ -320,7 +325,10 @@ pub mod module {
             let unlock = T::BlockNumberProvider::current_block_number() + length;
 
             Accounts::<T>::mutate(&user, |account_data| {
-                ensure!(account_data.free + account_data.reserved >= amount, Error::<T>::InsufficientBalance);
+                ensure!(
+                    account_data.free + account_data.reserved >= amount,
+                    Error::<T>::InsufficientBalance
+                );
 
                 let mut remain = amount;
                 let free_deduction = min(account_data.free, remain);
@@ -337,12 +345,9 @@ pub mod module {
                 account_data.locked.push(new_locked_fund);
 
                 // Add new unlock user to the AccountWithUnlockedFunds
-                AccountWithUnlockedFund::<T>::append(
-                    unlock,
-                    (user.clone(), new_locked_fund.id),
-                );
+                AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
 
-                Self::deposit_event(Event::<T>::AuditorLock {
+                Self::deposit_event(Event::<T>::AuditorLocked {
                     user: user.clone(),
                     amount,
                     length,
@@ -366,20 +371,7 @@ pub mod module {
             // Ensure the user is a customer to be locked
             T::RoleManager::ensure_role(&user, Role::Customer)?;
 
-            // Implement logic to unlock funds from Accounts.
-            Accounts::<T>::mutate(&user, |account_data|{
-                account_data.locked.retain(|item| 
-                    if item.id == lock_id && item.reason == LockReason::Auditor {
-                        // unlock fund
-                        account_data.free = account_data.free.saturating_add(item.amount);
-                        Self::deposit_event(Event::AuditorUnlock { user: user.clone(), amount: item.amount });
-                        false
-                    } else {
-                        true
-                    }
-                );
-            });
-            Ok(())
+            Self::unlock(&user, lock_id, UnlockReason::Auditor)
         }
     }
 }
@@ -390,7 +382,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
             return Err(Error::<T>::AmountTooSmall.into());
         }
         Self::mint(&user, amount)?;
-        Self::deposit_event(Event::<T>::Deposit {
+        Self::deposit_event(Event::<T>::Deposited {
             user: user.clone(),
             amount,
         });
@@ -402,7 +394,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
             return Err(Error::<T>::AmountTooSmall.into());
         }
         Self::burn(&user, amount)?;
-        Self::deposit_event(Event::<T>::Withdraw {
+        Self::deposit_event(Event::<T>::Withdrew {
             user: user.clone(),
             amount,
         });
@@ -424,7 +416,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
         Accounts::<T>::mutate(&to, |balance| {
             balance.free = balance.free.saturating_add(amount);
         });
-        Self::deposit_event(Event::Transfer {
+        Self::deposit_event(Event::Transferred {
             from: from.clone(),
             to: to.clone(),
             amount,
@@ -438,15 +430,12 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
         // Stake funds from free to reserved
         T::RoleManager::ensure_role(&user, Role::Customer)?;
         Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
-            if balance.free >= amount {
-                balance.free -= amount;
-                balance.reserved += amount;
-                Ok(())
-            } else {
-                Err(Error::<T>::InsufficientBalance.into())
-            }
+            ensure!(balance.free >= amount, Error::<T>::InsufficientBalance);
+            balance.free -= amount;
+            balance.reserved += amount;
+            Ok(())
         })?;
-        Self::deposit_event(Event::<T>::Stake {
+        Self::deposit_event(Event::<T>::Staked {
             user: user.clone(),
             amount,
         });
@@ -460,25 +449,22 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
         let unlock = T::BlockNumberProvider::current_block_number() + T::RedeemPeriod::get();
 
         // Add new locked funds to user's Account Data
-        Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
-            if balance.reserved >= amount {
-                balance.reserved -= amount;
-                let new_locked_fund = LockedFund {
-                    id: Self::next_lock_id(),
-                    amount,
-                    reason: LockReason::Redeem,
-                };
-                balance.locked.push(new_locked_fund);
+        Accounts::<T>::mutate(&user, |account| -> DispatchResult {
+            ensure!(account.reserved >= amount, Error::<T>::InsufficientBalance);
+            account.reserved -= amount;
+            let new_locked_fund = LockedFund {
+                id: Self::next_lock_id(),
+                amount,
+                reason: LockReason::Redeem,
+            };
+            account.locked.push(new_locked_fund);
 
-                // Add new unlock user to the AccountWithUnlockedFunds
-                AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
-                Ok(())
-            } else {
-                Err(Error::<T>::InsufficientBalance.into())
-            }
+            // Add new unlock user to the AccountWithUnlockedFunds
+            AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
+            Ok(())
         })?;
 
-        Self::deposit_event(Event::<T>::Redeem {
+        Self::deposit_event(Event::<T>::Redeemed {
             user: user.clone(),
             amount,
         });
@@ -522,9 +508,8 @@ impl<T: Config> Pallet<T> {
     fn check_total_issuance() -> bool {
         TotalIssuance::<T>::get()
             == Accounts::<T>::iter()
-                .map(|(_, account)| account.free
-                .saturating_add(account.reserved)
-                .saturating_add(account.locked.iter().map(|l| l.amount).sum())).sum()
+                .map(|(_, account)| account.total())
+                .sum()
     }
 
     /// Reaps funds from accounts that have balances below the Existential Deposit (ED).
@@ -558,23 +543,34 @@ impl<T: Config> Pallet<T> {
     }
 
     ///Transfer locked funds to free funds
-    fn unlock(account_id: &T::AccountId, locked_id: LockId) {
-        Accounts::<T>::mutate(account_id, |account_data| {
+    fn unlock(
+        account_id: &T::AccountId,
+        locked_id: LockId,
+        reason: UnlockReason,
+    ) -> DispatchResult {
+        Accounts::<T>::try_mutate(account_id, |account_data| {
             if let Some(index) = account_data
                 .locked
                 .iter()
                 .position(|item| item.id == locked_id)
             {
+                ensure!(
+                    reason != UnlockReason::Auditor
+                        || account_data.locked[index].reason == LockReason::Auditor,
+                    Error::<T>::UnauthorisedUnlock
+                );
                 let unlocked_amount = account_data.locked[index].amount;
                 account_data.free += unlocked_amount;
 
                 // Remove the unlocked locked fund from the vector
                 account_data.locked.remove(index);
-                Self::deposit_event(Event::UnLock {
+                Self::deposit_event(Event::Unlocked {
                     user: account_id.clone(),
                     amount: unlocked_amount,
+                    reason,
                 });
             }
-        });
+            Ok(())
+        })
     }
 }

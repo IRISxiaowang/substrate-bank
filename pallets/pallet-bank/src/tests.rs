@@ -22,7 +22,7 @@ fn can_deposit() {
         // Check that the event was emitted
         assert_eq!(
             System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Deposit {
+            RuntimeEvent::Bank(Event::<Runtime>::Deposited {
                 user: BOB,
                 amount: 1_000
             })
@@ -54,7 +54,7 @@ fn can_withdraw() {
             assert_ok!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 100));
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Withdraw {
+                RuntimeEvent::Bank(Event::<Runtime>::Withdrew {
                     user: BOB,
                     amount: 100
                 })
@@ -82,7 +82,7 @@ fn can_transfer() {
             // Check that the event was emitted
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Transfer {
+                RuntimeEvent::Bank(Event::<Runtime>::Transferred {
                     from: ALICE,
                     to: BOB,
                     amount: 100
@@ -176,7 +176,7 @@ fn can_stake_funds() {
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 200));
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Stake {
+                RuntimeEvent::Bank(Event::<Runtime>::Staked {
                     user: ALICE.clone(),
                     amount: 200
                 })
@@ -201,7 +201,7 @@ fn can_redeem_funds() {
             assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 200));
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Redeem {
+                RuntimeEvent::Bank(Event::<Runtime>::Redeemed {
                     user: ALICE.clone(),
                     amount: 200
                 })
@@ -246,7 +246,7 @@ fn can_auditor_lock_funds() {
             ));
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::AuditorLock {
+                RuntimeEvent::Bank(Event::<Runtime>::AuditorLocked {
                     user: ALICE.clone(),
                     amount: 200,
                     length: 20
@@ -283,14 +283,14 @@ fn can_auditor_unlock_funds() {
             assert_eq!(Bank::accounts(&charlie), AccountData::default());
             assert_ok!(Roles::register_role(&charlie, Role::Auditor));
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
-            
+
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
                 ALICE,
                 200,
                 20
             ));
-            
+
             assert_eq!(
                 Accounts::<Runtime>::get(&ALICE),
                 AccountData {
@@ -305,13 +305,17 @@ fn can_auditor_unlock_funds() {
             );
 
             System::reset_events();
-            assert_ok!(Bank::unlock_funds_auditor(RuntimeOrigin::signed(charlie),
-            ALICE, 1));
+            assert_ok!(Bank::unlock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                1
+            ));
             assert_eq!(
                 System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::AuditorUnlock {
+                RuntimeEvent::Bank(Event::<Runtime>::Unlocked {
                     user: ALICE.clone(),
-                    amount: 200
+                    amount: 200,
+                    reason: UnlockReason::Auditor
                 })
             );
 
