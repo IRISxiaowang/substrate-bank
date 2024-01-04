@@ -336,3 +336,65 @@ fn auditor_can_unlock_funds() {
             assert!(Bank::check_total_issuance());
         });
 }
+
+#[test]
+fn incorrect_role_cannot_call_auditor_function() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            let charlie: AccountId = 3u32;
+            assert_eq!(Bank::accounts(&charlie), AccountData::default());
+            assert_ok!(Roles::register_role(&charlie, Role::Auditor));
+            assert_eq!(Bank::accounts(&BOB), AccountData::default());
+            assert_ok!(Roles::register_role(&BOB, Role::Manager));
+            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
+
+            // Auditor can lock and unlock
+            assert_ok!(Bank::lock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                200,
+                20
+            ));
+
+            assert_ok!(Bank::unlock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                200
+            ));
+
+            // Customer cannot lock/unlock
+            assert_noop!(
+                Bank::lock_funds_auditor(RuntimeOrigin::signed(ALICE), ALICE, 100, 20),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+            assert_noop!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(ALICE), ALICE, 1),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+
+            // Manager cannot lock/unlock
+            assert_noop!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(BOB), ALICE, 1),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+            assert_noop!(
+                Bank::lock_funds_auditor(RuntimeOrigin::signed(BOB), ALICE, 100, 20),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+
+            assert_eq!(
+                Accounts::<Runtime>::get(&ALICE),
+                AccountData {
+                    free: 0,
+                    reserved: 800,
+                    locked: vec![LockedFund {
+                        id: 1,
+                        amount: 200,
+                        reason: LockReason::Auditor,
+                    },]
+                }
+            );
+            assert!(Bank::check_total_issuance());
+        });
+}
