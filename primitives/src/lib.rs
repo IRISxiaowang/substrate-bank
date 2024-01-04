@@ -79,3 +79,6 @@ pub type BlockId = generic::BlockId<Block>;
 
 /// Opaque, encoded, unchecked extrinsic.
 pub use sp_runtime::OpaqueExtrinsic as UncheckedExtrinsic;
+
+/// Lock Id
+pub type LockId = u64;

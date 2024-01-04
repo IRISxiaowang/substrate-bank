@@ -8,13 +8,13 @@ use frame_system::pallet_prelude::*;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{
-    traits::{AtLeast32BitUnsigned, Saturating},
+    traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
     DispatchResult,
 };
-use sp_std::{fmt::Debug, prelude::*, vec::Vec};
+use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
-use primitives::Role;
-use traits::{BasicAccounting, ManageRoles};
+use primitives::{LockId, Role};
+use traits::{BasicAccounting, ManageRoles, Stakable};
 
 mod mock;
 mod tests;
@@ -23,18 +23,39 @@ mod weights;
 
 pub use weights::WeightInfo;
 
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum LockReason {
+    Redeem,
+    Auditor,
+}
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum UnlockReason {
+    Expired,
+    Auditor,
+}
+
+/// Stores locked funds.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub struct LockedFund<Balance> {
+    pub id: LockId,
+    pub amount: Balance,
+    pub reason: LockReason,
+}
+
 /// balance information for an account.
-#[derive(
-    Encode, Decode, Copy, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo,
-)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct AccountData<Balance> {
     pub free: Balance,
     pub reserved: Balance,
+    pub locked: Vec<LockedFund<Balance>>,
 }
 
-impl<Balance: Saturating + Copy> AccountData<Balance> {
+impl<Balance: Saturating + Copy + sp_std::iter::Sum> AccountData<Balance> {
     pub fn total(&self) -> Balance {
-        self.free.saturating_add(self.reserved)
+        self.free
+            .saturating_add(self.reserved)
+            .saturating_add(self.locked.iter().map(|l| l.amount).sum())
     }
 }
 
@@ -42,6 +63,7 @@ pub use module::*;
 
 #[frame_support::pallet]
 pub mod module {
+    use sp_runtime::traits::BlockNumberProvider;
 
     use super::*;
 
@@ -63,6 +85,8 @@ pub mod module {
 
         type RoleManager: ManageRoles<Self::AccountId>;
 
+        type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
+
         #[pallet::constant]
         type ExistentialDeposit: Get<Self::Balance>;
 
@@ -71,6 +95,9 @@ pub mod module {
 
         #[pallet::constant]
         type MinimumAmount: Get<Self::Balance>;
+
+        #[pallet::constant]
+        type RedeemPeriod: Get<BlockNumberFor<Self>>;
     }
 
     #[pallet::error]
@@ -79,25 +106,27 @@ pub mod module {
         InsufficientBalance,
         /// The amount given is too small.
         AmountTooSmall,
+        /// Unlock reason is not compatible with the lock.
+        UnauthorisedUnlock,
     }
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
     pub enum Event<T: Config> {
         /// A manager role has minted some funds into an account.
-        Deposit {
+        Deposited {
             user: T::AccountId,
             amount: T::Balance,
         },
 
         /// A manager role has burned some fund from an account.
-        Withdraw {
+        Withdrew {
             user: T::AccountId,
             amount: T::Balance,
         },
 
         /// Transfered some fund from an account into another account.
-        Transfer {
+        Transferred {
             from: T::AccountId,
             to: T::AccountId,
             amount: T::Balance,
@@ -107,6 +136,27 @@ pub mod module {
         Reaped {
             user: T::AccountId,
             dust: T::Balance,
+        },
+
+        /// Staked some fund from an account's "free" to "reserved".
+        Staked {
+            user: T::AccountId,
+            amount: T::Balance,
+        },
+
+        /// Auditor or client locked some fund from an account's "free" and "reserved" to "locked".
+        Locked {
+            user: T::AccountId,
+            amount: T::Balance,
+            length: BlockNumberFor<T>,
+            reason: LockReason,
+        },
+
+        /// Auditor or client unlocked some fund from an account's "locked" to "free".
+        Unlocked {
+            user: T::AccountId,
+            amount: T::Balance,
+            reason: UnlockReason,
         },
     }
 
@@ -120,6 +170,15 @@ pub mod module {
     #[pallet::getter(fn total_issuance)]
     /// Storage item to track the total issuance of the token.
     pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+    /// Stores the user ID that will have their fund unlocked at a black.
+    #[pallet::storage]
+    pub type AccountWithUnlockedFund<T: Config> =
+        StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, Vec<(T::AccountId, LockId)>, ValueQuery>;
+
+    /// Stores the next locked ID should be.
+    #[pallet::storage]
+    pub type NextLockId<T: Config> = StorageValue<_, LockId, ValueQuery>;
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config> {
@@ -140,10 +199,10 @@ pub mod module {
                 .balances
                 .iter()
                 .map(|(account_id, initial_balance)| {
-                    // assert!(
-                    // 	*initial_balance >= T::ExistentialDeposits::get(),
-                    // 	"the balance of any account should always be more than existential deposit.",
-                    // );
+                    assert!(
+                    	*initial_balance >= T::ExistentialDeposit::get(),
+                    	"the balance of any account should always be more than existential deposit.",
+                    );
                     let _ = T::RoleManager::register_role(&account_id, Role::Customer);
                     Accounts::<T>::mutate(account_id, |account_data| {
                         account_data.free = *initial_balance
@@ -156,6 +215,7 @@ pub mod module {
     }
 
     #[pallet::pallet]
+    #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
     #[pallet::hooks]
@@ -165,8 +225,16 @@ pub mod module {
             assert!(T::MinimumAmount::get() >= T::ExistentialDeposit::get());
         }
 
-        fn on_finalize(_block_number: BlockNumberFor<T>) {
+        fn on_finalize(block_number: BlockNumberFor<T>) {
+            // Reap accounts below ED
             Self::reap_accounts();
+
+            // Unlock funds that are due.
+            AccountWithUnlockedFund::<T>::take(&block_number)
+                .into_iter()
+                .for_each(|(user, lock_id)| {
+                    let _ = Self::unlock(&user, lock_id, UnlockReason::Expired);
+                });
         }
     }
 
@@ -215,6 +283,92 @@ pub mod module {
             T::RoleManager::ensure_role(&to_user, Role::Customer)?;
             <Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(&id, &to_user, amount)
         }
+
+        /// Stake `amount` of fund from the current user's free account to reserved account.
+        #[pallet::call_index(3)]
+        #[pallet::weight(0)]
+        pub fn stake_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
+            let user = ensure_signed(origin)?;
+            T::RoleManager::ensure_role(&user, Role::Customer)?;
+            <Self as Stakable<T::AccountId, T::Balance>>::stake_funds(&user, amount)
+        }
+
+        /// Redeem `amount` of fund from the current user's reserved account to locked account.
+        #[pallet::call_index(4)]
+        #[pallet::weight(0)]
+        pub fn redeem_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
+            let user = ensure_signed(origin)?;
+            T::RoleManager::ensure_role(&user, Role::Customer)?;
+            <Self as Stakable<T::AccountId, T::Balance>>::redeem_funds(&user, amount)
+        }
+        /// Auditor locked `amount` of fund from the any user's account to locked account for some period.
+        /// Funds are taken from "free" first, then from "reserved".
+        #[pallet::call_index(5)]
+        #[pallet::weight(0)]
+        pub fn lock_funds_auditor(
+            origin: OriginFor<T>,
+            user: T::AccountId,
+            amount: T::Balance,
+            length: BlockNumberFor<T>,
+        ) -> DispatchResult {
+            // Ensure the caller is the Auditor
+            let id = ensure_signed(origin)?;
+            T::RoleManager::ensure_role(&id, Role::Auditor)?;
+            // Ensure the user is a customer to be locked
+            T::RoleManager::ensure_role(&user, Role::Customer)?;
+            // Implement logic to lock funds from free and reserved
+            let unlock = T::BlockNumberProvider::current_block_number() + length;
+
+            Accounts::<T>::mutate(&user, |account_data| {
+                ensure!(
+                    account_data.free + account_data.reserved >= amount,
+                    Error::<T>::InsufficientBalance
+                );
+
+                let mut remain = amount;
+                let free_deduction = min(account_data.free, remain);
+                account_data.free -= free_deduction;
+                remain -= free_deduction;
+
+                account_data.reserved -= remain;
+
+                let new_locked_fund = LockedFund {
+                    id: Self::next_lock_id(),
+                    amount,
+                    reason: LockReason::Auditor,
+                };
+                account_data.locked.push(new_locked_fund);
+
+                // Add new unlock user to the AccountWithUnlockedFunds
+                AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
+
+                Self::deposit_event(Event::<T>::Locked {
+                    user: user.clone(),
+                    amount,
+                    length,
+                    reason: LockReason::Auditor,
+                });
+                Ok(())
+            })
+        }
+
+        /// Auditor unlocked the LockId which free the `amount` of fund from the user locked by auditor.
+        /// Funds are returned from "locked" to "free".
+        #[pallet::call_index(6)]
+        #[pallet::weight(0)]
+        pub fn unlock_funds_auditor(
+            origin: OriginFor<T>,
+            user: T::AccountId,
+            lock_id: LockId,
+        ) -> DispatchResult {
+            // Ensure the caller is the Auditor
+            let id = ensure_signed(origin)?;
+            T::RoleManager::ensure_role(&id, Role::Auditor)?;
+            // Ensure the user is a customer to be locked
+            T::RoleManager::ensure_role(&user, Role::Customer)?;
+
+            Self::unlock(&user, lock_id, UnlockReason::Auditor)
+        }
     }
 }
 
@@ -224,7 +378,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
             return Err(Error::<T>::AmountTooSmall.into());
         }
         Self::mint(&user, amount)?;
-        Self::deposit_event(Event::<T>::Deposit {
+        Self::deposit_event(Event::<T>::Deposited {
             user: user.clone(),
             amount,
         });
@@ -236,7 +390,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
             return Err(Error::<T>::AmountTooSmall.into());
         }
         Self::burn(&user, amount)?;
-        Self::deposit_event(Event::<T>::Withdraw {
+        Self::deposit_event(Event::<T>::Withdrew {
             user: user.clone(),
             amount,
         });
@@ -258,10 +412,69 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
         Accounts::<T>::mutate(&to, |balance| {
             balance.free = balance.free.saturating_add(amount);
         });
-        Self::deposit_event(Event::Transfer {
+        Self::deposit_event(Event::Transferred {
             from: from.clone(),
             to: to.clone(),
             amount,
+        });
+        Ok(())
+    }
+}
+
+impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
+    /// Stake funds from free to reserved
+    fn stake_funds(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        T::RoleManager::ensure_role(&user, Role::Customer)?;
+        ensure!(
+            amount >= T::MinimumAmount::get(),
+            Error::<T>::AmountTooSmall
+        );
+        Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
+            ensure!(balance.free >= amount, Error::<T>::InsufficientBalance);
+            balance.free -= amount;
+            balance.reserved += amount;
+            Ok(())
+        })?;
+        Self::deposit_event(Event::<T>::Staked {
+            user: user.clone(),
+            amount,
+        });
+
+        Ok(())
+    }
+
+    /// Redeem funds from reserved to free after a certain time
+    fn redeem_funds(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
+        T::RoleManager::ensure_role(&user, Role::Customer)?;
+        ensure!(
+            amount >= T::MinimumAmount::get(),
+            Error::<T>::AmountTooSmall
+        );
+
+        // get unlock BlockNumber
+        let unlock = T::BlockNumberProvider::current_block_number() + T::RedeemPeriod::get();
+
+        // Add new locked funds to user's Account Data
+        Accounts::<T>::mutate(&user, |account| -> DispatchResult {
+            ensure!(account.reserved >= amount, Error::<T>::InsufficientBalance);
+            account.reserved -= amount;
+            let new_locked_fund = LockedFund {
+                id: Self::next_lock_id(),
+                amount,
+                reason: LockReason::Redeem,
+            };
+            account.locked.push(new_locked_fund);
+
+            // Add new unlock user to the AccountWithUnlockedFunds
+            AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
+            Ok(())
+        })?;
+
+        Self::deposit_event(Event::<T>::Locked {
+            user: user.clone(),
+            amount,
+            length: T::RedeemPeriod::get(),
+            reason: LockReason::Redeem,
         });
         Ok(())
     }
@@ -303,7 +516,7 @@ impl<T: Config> Pallet<T> {
     fn check_total_issuance() -> bool {
         TotalIssuance::<T>::get()
             == Accounts::<T>::iter()
-                .map(|(_, account)| account.free + account.reserved)
+                .map(|(_, account)| account.total())
                 .sum()
     }
 
@@ -327,5 +540,45 @@ impl<T: Config> Pallet<T> {
                 treasury_account.free += total_reaped_amount;
             });
         }
+    }
+
+    /// Get the lock id to store into the LockedFund.
+    fn next_lock_id() -> LockId {
+        NextLockId::<T>::mutate(|id| {
+            *id += 1u64;
+            *id
+        })
+    }
+
+    ///Transfer locked funds to free funds
+    fn unlock(
+        account_id: &T::AccountId,
+        locked_id: LockId,
+        reason: UnlockReason,
+    ) -> DispatchResult {
+        Accounts::<T>::try_mutate(account_id, |account_data| {
+            if let Some(index) = account_data
+                .locked
+                .iter()
+                .position(|item| item.id == locked_id)
+            {
+                ensure!(
+                    reason != UnlockReason::Auditor
+                        || account_data.locked[index].reason == LockReason::Auditor,
+                    Error::<T>::UnauthorisedUnlock
+                );
+                let unlocked_amount = account_data.locked[index].amount;
+                account_data.free += unlocked_amount;
+
+                // Remove the unlocked locked fund from the vector
+                account_data.locked.remove(index);
+                Self::deposit_event(Event::Unlocked {
+                    user: account_id.clone(),
+                    amount: unlocked_amount,
+                    reason,
+                });
+            }
+            Ok(())
+        })
     }
 }

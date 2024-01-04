@@ -4,7 +4,7 @@
 
 use crate::mock::{
     default_test_ext, AccountId, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
-    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB,
+    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB, REDEEM_PERIOD,
 };
 use crate::*;
 use frame_support::{assert_noop, assert_ok};
@@ -20,20 +20,11 @@ fn can_deposit() {
         let sender = RuntimeOrigin::signed(ALICE);
         assert_ok!(Bank::deposit(sender, BOB, 1_000));
         // Check that the event was emitted
-        assert_eq!(
-            System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Deposit {
-                user: BOB,
-                amount: 1_000
-            })
-        );
-        assert_eq!(
-            Accounts::<Runtime>::get(&BOB),
-            AccountData {
-                free: 1_000,
-                reserved: 0
-            }
-        );
+        System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Deposited {
+            user: BOB,
+            amount: 1_000,
+        }));
+        assert_eq!(Accounts::<Runtime>::get(&BOB).free, 1_000);
         assert_noop!(
             Bank::deposit(RuntimeOrigin::signed(ALICE), ALICE, 500),
             pallet_roles::Error::<Runtime>::IncorrectRole
@@ -44,20 +35,8 @@ fn can_deposit() {
     MockGenesisConfig::with_balances(vec![(ALICE, 1_000_000), (BOB, 50)])
         .build()
         .execute_with(|| {
-            assert_eq!(
-                Accounts::<Runtime>::get(&ALICE),
-                AccountData {
-                    free: 1_000_000,
-                    reserved: 0
-                }
-            );
-            assert_eq!(
-                Accounts::<Runtime>::get(&BOB),
-                AccountData {
-                    free: 50,
-                    reserved: 0
-                }
-            );
+            assert_eq!(Accounts::<Runtime>::get(&ALICE).free, 1_000_000);
+            assert_eq!(Accounts::<Runtime>::get(&BOB).free, 50);
         });
 }
 
@@ -67,29 +46,14 @@ fn can_withdraw() {
         .build()
         .execute_with(|| {
             assert_ok!(Roles::register_role(&ALICE, Role::Manager));
-            assert_eq!(
-                Accounts::<Runtime>::get(&BOB),
-                AccountData {
-                    free: 500,
-                    reserved: 0
-                }
-            );
+            assert_eq!(Accounts::<Runtime>::get(&BOB).free, 500);
             System::reset_events();
             assert_ok!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 100));
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Withdraw {
-                    user: BOB,
-                    amount: 100
-                })
-            );
-            assert_eq!(
-                Accounts::<Runtime>::get(&BOB),
-                AccountData {
-                    free: 400,
-                    reserved: 0
-                }
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Withdrew {
+                user: BOB,
+                amount: 100,
+            }));
+            assert_eq!(Accounts::<Runtime>::get(&BOB).free, 400);
             assert_noop!(
                 Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 500),
                 Error::<Runtime>::InsufficientBalance
@@ -110,29 +74,14 @@ fn can_transfer() {
             System::reset_events();
             assert_ok!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 100));
             // Check that the event was emitted
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Transfer {
-                    from: ALICE,
-                    to: BOB,
-                    amount: 100
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Transferred {
+                from: ALICE,
+                to: BOB,
+                amount: 100,
+            }));
 
-            assert_eq!(
-                Accounts::<Runtime>::get(&BOB),
-                AccountData {
-                    free: 600,
-                    reserved: 0
-                }
-            );
-            assert_eq!(
-                Accounts::<Runtime>::get(&ALICE),
-                AccountData {
-                    free: 900,
-                    reserved: 0
-                }
-            );
+            assert_eq!(Accounts::<Runtime>::get(&BOB).free, 600);
+            assert_eq!(Accounts::<Runtime>::get(&ALICE).free, 900);
             assert_noop!(
                 Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 1_000),
                 Error::<Runtime>::InsufficientBalance
@@ -170,6 +119,15 @@ fn cannot_dealwith_smaller_than_min() {
             Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 4),
             Error::<Runtime>::AmountTooSmall
         );
+
+        assert_noop!(
+            Bank::stake_funds(RuntimeOrigin::signed(ALICE), 4),
+            Error::<Runtime>::AmountTooSmall
+        );
+        assert_noop!(
+            Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 4),
+            Error::<Runtime>::AmountTooSmall
+        );
     });
 }
 
@@ -185,47 +143,258 @@ fn can_reaped() {
         assert_ok!(Roles::register_role(&charlie, Role::Manager));
 
         assert_ok!(Bank::deposit(RuntimeOrigin::signed(charlie), BOB, 100));
-        assert_eq!(
-            Accounts::<Runtime>::get(&BOB),
-            AccountData {
-                free: 100,
-                reserved: 0
-            }
-        );
+        assert_eq!(Accounts::<Runtime>::get(&BOB).free, 100);
         assert_ok!(Bank::transfer(RuntimeOrigin::signed(BOB), ALICE, 98));
-        assert_eq!(
-            Accounts::<Runtime>::get(&BOB),
-            AccountData {
-                free: 2,
-                reserved: 0
-            }
-        );
-        assert_eq!(
-            Accounts::<Runtime>::get(&ALICE),
-            AccountData {
-                free: 98,
-                reserved: 0
-            }
-        );
+        assert_eq!(Accounts::<Runtime>::get(&BOB).free, 2);
+        assert_eq!(Accounts::<Runtime>::get(&ALICE).free, 98);
 
         System::reset_events();
         Bank::reap_accounts();
-        assert_eq!(
-            System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Reaped {
-                user: BOB.clone(),
-                dust: 2
-            })
-        );
+        System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Reaped {
+            user: BOB.clone(),
+            dust: 2,
+        }));
         assert_eq!(Accounts::<Runtime>::get(&BOB), Default::default());
         assert_eq!(
-            Accounts::<Runtime>::get(&TreasuryAccount::get()),
-            AccountData {
-                free: 1_000_002,
-                reserved: 0
-            }
+            Accounts::<Runtime>::get(&TreasuryAccount::get()).free,
+            1_000_002
         );
 
         assert!(Bank::check_total_issuance());
     });
+}
+
+#[test]
+fn can_stake_funds() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            System::reset_events();
+            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 200));
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Staked {
+                user: ALICE.clone(),
+                amount: 200,
+            }));
+
+            assert!(Bank::check_total_issuance());
+
+            assert_noop!(
+                Bank::stake_funds(RuntimeOrigin::signed(ALICE), 801),
+                Error::<Runtime>::InsufficientBalance
+            );
+        });
+}
+
+#[test]
+fn can_redeem_funds() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 1_000));
+            System::reset_events();
+            assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 200));
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
+                user: ALICE.clone(),
+                amount: 200,
+                length: REDEEM_PERIOD,
+                reason: LockReason::Redeem,
+            }));
+            assert_eq!(
+                Accounts::<Runtime>::get(&ALICE),
+                AccountData {
+                    free: 0,
+                    reserved: 800,
+                    locked: vec![LockedFund {
+                        id: 1,
+                        amount: 200,
+                        reason: LockReason::Redeem,
+                    }]
+                }
+            );
+
+            assert!(Bank::check_total_issuance());
+
+            assert_noop!(
+                Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 801),
+                Error::<Runtime>::InsufficientBalance
+            );
+        });
+}
+
+#[test]
+fn auditor_can_lock_funds() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            let charlie: AccountId = 3u32;
+            assert_eq!(Bank::accounts(&charlie), AccountData::default());
+            assert_ok!(Roles::register_role(&charlie, Role::Auditor));
+            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
+            System::reset_events();
+            assert_ok!(Bank::lock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                200,
+                20
+            ));
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
+                user: ALICE.clone(),
+                amount: 200,
+                length: 20,
+                reason: LockReason::Auditor,
+            }));
+            assert_eq!(
+                Accounts::<Runtime>::get(&ALICE),
+                AccountData {
+                    free: 0,
+                    reserved: 800,
+                    locked: vec![LockedFund {
+                        id: 1,
+                        amount: 200,
+                        reason: LockReason::Auditor,
+                    }]
+                }
+            );
+
+            assert!(Bank::check_total_issuance());
+
+            assert_noop!(
+                Bank::lock_funds_auditor(RuntimeOrigin::signed(charlie), ALICE, 801, 20),
+                Error::<Runtime>::InsufficientBalance
+            );
+        });
+}
+
+#[test]
+fn auditor_can_unlock_funds() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            let charlie: AccountId = 3u32;
+            assert_eq!(Bank::accounts(&charlie), AccountData::default());
+            assert_ok!(Roles::register_role(&charlie, Role::Auditor));
+            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
+
+            assert_ok!(Bank::lock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                200,
+                20
+            ));
+
+            assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 500));
+
+            assert_eq!(
+                Accounts::<Runtime>::get(&ALICE),
+                AccountData {
+                    free: 0,
+                    reserved: 300,
+                    locked: vec![
+                        LockedFund {
+                            id: 1,
+                            amount: 200,
+                            reason: LockReason::Auditor,
+                        },
+                        LockedFund {
+                            id: 2,
+                            amount: 500,
+                            reason: LockReason::Redeem,
+                        }
+                    ]
+                }
+            );
+
+            assert_noop!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(charlie), ALICE, 2),
+                Error::<Runtime>::UnauthorisedUnlock
+            );
+
+            System::reset_events();
+            assert_ok!(Bank::unlock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                1
+            ));
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Unlocked {
+                user: ALICE.clone(),
+                amount: 200,
+                reason: UnlockReason::Auditor,
+            }));
+
+            assert_eq!(
+                Accounts::<Runtime>::get(&ALICE),
+                AccountData {
+                    free: 200,
+                    reserved: 300,
+                    locked: vec![LockedFund {
+                        id: 2,
+                        amount: 500,
+                        reason: LockReason::Redeem,
+                    }]
+                }
+            );
+            assert!(Bank::check_total_issuance());
+        });
+}
+
+#[test]
+fn incorrect_role_cannot_call_auditor_function() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            let charlie: AccountId = 3u32;
+            assert_eq!(Bank::accounts(&charlie), AccountData::default());
+            assert_ok!(Roles::register_role(&charlie, Role::Auditor));
+            assert_eq!(Bank::accounts(&BOB), AccountData::default());
+            assert_ok!(Roles::register_role(&BOB, Role::Manager));
+            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
+
+            // Auditor can lock and unlock
+            assert_ok!(Bank::lock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                200,
+                20
+            ));
+
+            assert_ok!(Bank::unlock_funds_auditor(
+                RuntimeOrigin::signed(charlie),
+                ALICE,
+                200
+            ));
+
+            // Customer cannot lock/unlock
+            assert_noop!(
+                Bank::lock_funds_auditor(RuntimeOrigin::signed(ALICE), ALICE, 100, 20),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+            assert_noop!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(ALICE), ALICE, 1),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+
+            // Manager cannot lock/unlock
+            assert_noop!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(BOB), ALICE, 1),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+            assert_noop!(
+                Bank::lock_funds_auditor(RuntimeOrigin::signed(BOB), ALICE, 100, 20),
+                pallet_roles::Error::<Runtime>::IncorrectRole
+            );
+
+            assert_eq!(
+                Accounts::<Runtime>::get(&ALICE),
+                AccountData {
+                    free: 0,
+                    reserved: 800,
+                    locked: vec![LockedFund {
+                        id: 1,
+                        amount: 200,
+                        reason: LockReason::Auditor,
+                    },]
+                }
+            );
+            assert!(Bank::check_total_issuance());
+        });
 }
