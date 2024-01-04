@@ -144,20 +144,15 @@ pub mod module {
             amount: T::Balance,
         },
 
-        /// Redeemed some fund from an account's "reserved" to "locked".
-        Redeemed {
-            user: T::AccountId,
-            amount: T::Balance,
-        },
-
-        /// Auditor locked some fund from an account's "free" and "reserved" to "locked".
-        AuditorLocked {
+        /// Auditor or client locked some fund from an account's "free" and "reserved" to "locked".
+        Locked {
             user: T::AccountId,
             amount: T::Balance,
             length: BlockNumberFor<T>,
+            reason: LockReason,
         },
 
-        /// Unlocked some fund from an account's "locked" to "free".
+        /// Auditor or client unlocked some fund from an account's "locked" to "free".
         Unlocked {
             user: T::AccountId,
             amount: T::Balance,
@@ -347,10 +342,11 @@ pub mod module {
                 // Add new unlock user to the AccountWithUnlockedFunds
                 AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
 
-                Self::deposit_event(Event::<T>::AuditorLocked {
+                Self::deposit_event(Event::<T>::Locked {
                     user: user.clone(),
                     amount,
                     length,
+                    reason: LockReason::Auditor,
                 });
                 Ok(())
             })
@@ -426,9 +422,13 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 }
 
 impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
+    /// Stake funds from free to reserved
     fn stake_funds(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        // Stake funds from free to reserved
         T::RoleManager::ensure_role(&user, Role::Customer)?;
+        ensure!(
+            amount >= T::MinimumAmount::get(),
+            Error::<T>::AmountTooSmall
+        );
         Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
             ensure!(balance.free >= amount, Error::<T>::InsufficientBalance);
             balance.free -= amount;
@@ -443,8 +443,14 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
         Ok(())
     }
 
+    /// Redeem funds from reserved to free after a certain time
     fn redeem_funds(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-        // Redeem funds from reserved to free after a certain time
+        T::RoleManager::ensure_role(&user, Role::Customer)?;
+        ensure!(
+            amount >= T::MinimumAmount::get(),
+            Error::<T>::AmountTooSmall
+        );
+
         // get unlock BlockNumber
         let unlock = T::BlockNumberProvider::current_block_number() + T::RedeemPeriod::get();
 
@@ -464,9 +470,11 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
             Ok(())
         })?;
 
-        Self::deposit_event(Event::<T>::Redeemed {
+        Self::deposit_event(Event::<T>::Locked {
             user: user.clone(),
             amount,
+            length: T::RedeemPeriod::get(),
+            reason: LockReason::Redeem,
         });
         Ok(())
     }

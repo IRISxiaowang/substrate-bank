@@ -4,7 +4,7 @@
 
 use crate::mock::{
     default_test_ext, AccountId, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
-    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB,
+    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB, REDEEM_PERIOD,
 };
 use crate::*;
 use frame_support::{assert_noop, assert_ok};
@@ -20,13 +20,10 @@ fn can_deposit() {
         let sender = RuntimeOrigin::signed(ALICE);
         assert_ok!(Bank::deposit(sender, BOB, 1_000));
         // Check that the event was emitted
-        assert_eq!(
-            System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Deposited {
-                user: BOB,
-                amount: 1_000
-            })
-        );
+        System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Deposited {
+            user: BOB,
+            amount: 1_000,
+        }));
         assert_eq!(Accounts::<Runtime>::get(&BOB).free, 1_000);
         assert_noop!(
             Bank::deposit(RuntimeOrigin::signed(ALICE), ALICE, 500),
@@ -52,13 +49,10 @@ fn can_withdraw() {
             assert_eq!(Accounts::<Runtime>::get(&BOB).free, 500);
             System::reset_events();
             assert_ok!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 100));
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Withdrew {
-                    user: BOB,
-                    amount: 100
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Withdrew {
+                user: BOB,
+                amount: 100,
+            }));
             assert_eq!(Accounts::<Runtime>::get(&BOB).free, 400);
             assert_noop!(
                 Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 500),
@@ -80,14 +74,11 @@ fn can_transfer() {
             System::reset_events();
             assert_ok!(Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 100));
             // Check that the event was emitted
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Transferred {
-                    from: ALICE,
-                    to: BOB,
-                    amount: 100
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Transferred {
+                from: ALICE,
+                to: BOB,
+                amount: 100,
+            }));
 
             assert_eq!(Accounts::<Runtime>::get(&BOB).free, 600);
             assert_eq!(Accounts::<Runtime>::get(&ALICE).free, 900);
@@ -128,6 +119,15 @@ fn cannot_dealwith_smaller_than_min() {
             Bank::transfer(RuntimeOrigin::signed(ALICE), BOB, 4),
             Error::<Runtime>::AmountTooSmall
         );
+
+        assert_noop!(
+            Bank::stake_funds(RuntimeOrigin::signed(ALICE), 4),
+            Error::<Runtime>::AmountTooSmall
+        );
+        assert_noop!(
+            Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 4),
+            Error::<Runtime>::AmountTooSmall
+        );
     });
 }
 
@@ -150,13 +150,10 @@ fn can_reaped() {
 
         System::reset_events();
         Bank::reap_accounts();
-        assert_eq!(
-            System::events()[0].event,
-            RuntimeEvent::Bank(Event::<Runtime>::Reaped {
-                user: BOB.clone(),
-                dust: 2
-            })
-        );
+        System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Reaped {
+            user: BOB.clone(),
+            dust: 2,
+        }));
         assert_eq!(Accounts::<Runtime>::get(&BOB), Default::default());
         assert_eq!(
             Accounts::<Runtime>::get(&TreasuryAccount::get()).free,
@@ -174,13 +171,10 @@ fn can_stake_funds() {
         .execute_with(|| {
             System::reset_events();
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 200));
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Staked {
-                    user: ALICE.clone(),
-                    amount: 200
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Staked {
+                user: ALICE.clone(),
+                amount: 200,
+            }));
 
             assert!(Bank::check_total_issuance());
 
@@ -199,13 +193,12 @@ fn can_redeem_funds() {
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 1_000));
             System::reset_events();
             assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 200));
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Redeemed {
-                    user: ALICE.clone(),
-                    amount: 200
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
+                user: ALICE.clone(),
+                amount: 200,
+                length: REDEEM_PERIOD,
+                reason: LockReason::Redeem,
+            }));
             assert_eq!(
                 Accounts::<Runtime>::get(&ALICE),
                 AccountData {
@@ -229,7 +222,7 @@ fn can_redeem_funds() {
 }
 
 #[test]
-fn can_auditor_lock_funds() {
+fn auditor_can_lock_funds() {
     MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
         .build()
         .execute_with(|| {
@@ -244,14 +237,12 @@ fn can_auditor_lock_funds() {
                 200,
                 20
             ));
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::AuditorLocked {
-                    user: ALICE.clone(),
-                    amount: 200,
-                    length: 20
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
+                user: ALICE.clone(),
+                amount: 200,
+                length: 20,
+                reason: LockReason::Auditor,
+            }));
             assert_eq!(
                 Accounts::<Runtime>::get(&ALICE),
                 AccountData {
@@ -275,7 +266,7 @@ fn can_auditor_lock_funds() {
 }
 
 #[test]
-fn can_auditor_unlock_funds() {
+fn auditor_can_unlock_funds() {
     MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
         .build()
         .execute_with(|| {
@@ -291,17 +282,31 @@ fn can_auditor_unlock_funds() {
                 20
             ));
 
+            assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 500));
+
             assert_eq!(
                 Accounts::<Runtime>::get(&ALICE),
                 AccountData {
                     free: 0,
-                    reserved: 800,
-                    locked: vec![LockedFund {
-                        id: 1,
-                        amount: 200,
-                        reason: LockReason::Auditor,
-                    }]
+                    reserved: 300,
+                    locked: vec![
+                        LockedFund {
+                            id: 1,
+                            amount: 200,
+                            reason: LockReason::Auditor,
+                        },
+                        LockedFund {
+                            id: 2,
+                            amount: 500,
+                            reason: LockReason::Redeem,
+                        }
+                    ]
                 }
+            );
+
+            assert_noop!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(charlie), ALICE, 2),
+                Error::<Runtime>::UnauthorisedUnlock
             );
 
             System::reset_events();
@@ -310,21 +315,22 @@ fn can_auditor_unlock_funds() {
                 ALICE,
                 1
             ));
-            assert_eq!(
-                System::events()[0].event,
-                RuntimeEvent::Bank(Event::<Runtime>::Unlocked {
-                    user: ALICE.clone(),
-                    amount: 200,
-                    reason: UnlockReason::Auditor
-                })
-            );
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Unlocked {
+                user: ALICE.clone(),
+                amount: 200,
+                reason: UnlockReason::Auditor,
+            }));
 
             assert_eq!(
                 Accounts::<Runtime>::get(&ALICE),
                 AccountData {
                     free: 200,
-                    reserved: 800,
-                    locked: vec![]
+                    reserved: 300,
+                    locked: vec![LockedFund {
+                        id: 2,
+                        amount: 500,
+                        reason: LockReason::Redeem,
+                    }]
                 }
             );
             assert!(Bank::check_total_issuance());
