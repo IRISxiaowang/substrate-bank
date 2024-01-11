@@ -4,10 +4,10 @@
 
 use crate::mock::{
     default_test_ext, AccountId, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
-    RuntimeOrigin, System, TreasuryAccount, ALICE, BOB, REDEEM_PERIOD,
+    RuntimeOrigin, StakePeriod, System, TreasuryAccount, ALICE, BOB, REDEEM_PERIOD,
 };
 use crate::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok};
 
 #[test]
 fn can_deposit() {
@@ -171,9 +171,11 @@ fn can_stake_funds() {
         .execute_with(|| {
             System::reset_events();
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 200));
-            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Staked {
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
                 user: ALICE.clone(),
                 amount: 200,
+                length: StakePeriod::get(),
+                reason: LockReason::Stake,
             }));
 
             assert!(Bank::check_total_issuance());
@@ -191,6 +193,7 @@ fn can_redeem_funds() {
         .build()
         .execute_with(|| {
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 1_000));
+            Bank::on_finalize(System::block_number() + StakePeriod::get());
             System::reset_events();
             assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 200));
             System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
@@ -205,7 +208,7 @@ fn can_redeem_funds() {
                     free: 0,
                     reserved: 800,
                     locked: vec![LockedFund {
-                        id: 1,
+                        id: 2,
                         amount: 200,
                         reason: LockReason::Redeem,
                     }]
@@ -230,6 +233,7 @@ fn auditor_can_lock_funds() {
             assert_eq!(Bank::accounts(&charlie), AccountData::default());
             assert_ok!(Roles::register_role(&charlie, Role::Auditor));
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
+            Bank::on_finalize(System::block_number() + StakePeriod::get());
             System::reset_events();
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
@@ -249,7 +253,7 @@ fn auditor_can_lock_funds() {
                     free: 0,
                     reserved: 800,
                     locked: vec![LockedFund {
-                        id: 1,
+                        id: 2,
                         amount: 200,
                         reason: LockReason::Auditor,
                     }]
@@ -274,7 +278,7 @@ fn auditor_can_unlock_funds() {
             assert_eq!(Bank::accounts(&charlie), AccountData::default());
             assert_ok!(Roles::register_role(&charlie, Role::Auditor));
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
-
+            Bank::on_finalize(System::block_number() + StakePeriod::get());
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
                 ALICE,
@@ -291,12 +295,12 @@ fn auditor_can_unlock_funds() {
                     reserved: 300,
                     locked: vec![
                         LockedFund {
-                            id: 1,
+                            id: 2,
                             amount: 200,
                             reason: LockReason::Auditor,
                         },
                         LockedFund {
-                            id: 2,
+                            id: 3,
                             amount: 500,
                             reason: LockReason::Redeem,
                         }
@@ -305,7 +309,7 @@ fn auditor_can_unlock_funds() {
             );
 
             assert_noop!(
-                Bank::unlock_funds_auditor(RuntimeOrigin::signed(charlie), ALICE, 2),
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(charlie), ALICE, 3),
                 Error::<Runtime>::UnauthorisedUnlock
             );
 
@@ -313,7 +317,7 @@ fn auditor_can_unlock_funds() {
             assert_ok!(Bank::unlock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
                 ALICE,
-                1
+                2
             ));
             System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Unlocked {
                 user: ALICE.clone(),
@@ -327,7 +331,7 @@ fn auditor_can_unlock_funds() {
                     free: 200,
                     reserved: 300,
                     locked: vec![LockedFund {
-                        id: 2,
+                        id: 3,
                         amount: 500,
                         reason: LockReason::Redeem,
                     }]
@@ -348,19 +352,13 @@ fn incorrect_role_cannot_call_auditor_function() {
             assert_eq!(Bank::accounts(&BOB), AccountData::default());
             assert_ok!(Roles::register_role(&BOB, Role::Manager));
             assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
-
+            Bank::on_finalize(System::block_number() + StakePeriod::get());
             // Auditor can lock and unlock
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
                 ALICE,
                 200,
                 20
-            ));
-
-            assert_ok!(Bank::unlock_funds_auditor(
-                RuntimeOrigin::signed(charlie),
-                ALICE,
-                200
             ));
 
             // Customer cannot lock/unlock
@@ -389,12 +387,26 @@ fn incorrect_role_cannot_call_auditor_function() {
                     free: 0,
                     reserved: 800,
                     locked: vec![LockedFund {
-                        id: 1,
+                        id: 2,
                         amount: 200,
                         reason: LockReason::Auditor,
                     },]
                 }
             );
             assert!(Bank::check_total_issuance());
+        });
+}
+
+#[test]
+fn auditor_cannot_unlock_invalid_id() {
+    MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
+        .build()
+        .execute_with(|| {
+            let charlie: AccountId = 3u32;
+            assert_ok!(Roles::register_role(&charlie, Role::Auditor));
+            assert_err!(
+                Bank::unlock_funds_auditor(RuntimeOrigin::signed(charlie), ALICE, 200),
+                crate::Error::<Runtime>::InvalidLockId
+            );
         });
 }

@@ -8,6 +8,7 @@ use frame_support::{
     traits::{ConstU32, ConstU64, Everything},
 };
 
+use primitives::YEAR;
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
 use crate as pallet_bank;
@@ -21,7 +22,12 @@ pub const TREASURY: AccountId = 0;
 pub const ED: u128 = 3u128;
 pub const MIN: u128 = 5u128;
 pub const INITIAL_BALANCE: u128 = 1_000_000u128;
-pub const REDEEM_PERIOD: u64 = 10;
+pub const REDEEM_PERIOD: u64 = 200;
+pub const STAKE_PERIOD: u64 = 150;
+pub const INTEREST_PAYOUT_PERIOD: u64 = 100;
+
+type Block = frame_system::mocking::MockBlock<Runtime>;
+type BlockNumber = u64;
 
 impl frame_system::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
@@ -53,7 +59,10 @@ parameter_types! {
     pub const ExistentialDeposit: Balance = ED;
     pub const TreasuryAccount: AccountId = TREASURY;
     pub const MinimumAmount: Balance = MIN;
-    pub const RedeemPeriod: BlockNumberFor<Runtime> = REDEEM_PERIOD;
+    pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
+    pub const StakePeriod: BlockNumber = STAKE_PERIOD;
+    pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
+    pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
 }
 
 impl Config for Runtime {
@@ -65,13 +74,14 @@ impl Config for Runtime {
     type TreasuryAccount = TreasuryAccount;
     type MinimumAmount = MinimumAmount;
     type RedeemPeriod = RedeemPeriod;
+    type StakePeriod = StakePeriod;
+    type InterestPayoutPeriod = InterestPayoutPeriod;
+    type TotalBlocksPerYear = TotalBlocksPerYear;
 }
 
 impl pallet_roles::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
 }
-
-type Block = frame_system::mocking::MockBlock<Runtime>;
 
 construct_runtime!(
     pub enum Runtime
