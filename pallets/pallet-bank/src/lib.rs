@@ -9,7 +9,7 @@ use scale_info::TypeInfo;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
-    DispatchResult, Permill,
+    DispatchResult, Perbill,
 };
 use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
@@ -166,6 +166,12 @@ pub mod module {
             amount: T::Balance,
             reason: UnlockReason,
         },
+
+        /// Manager payed total interest.
+        InterestPayed {
+            interest_rate: Perbill,
+            total_interest_payed: T::Balance,
+        },
     }
 
     /// The balance of a token type under an account.
@@ -190,7 +196,7 @@ pub mod module {
 
     /// Stores the interest rate.
     #[pallet::storage]
-    pub type InterestRate<T: Config> = StorageValue<_, Permill, ValueQuery>;
+    pub type InterestRate<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config> {
@@ -259,16 +265,25 @@ pub mod module {
                 // scaled_ir = ir_pa / blocks_pa * blocks_per_payout
                 let interest_rate = InterestRate::<T>::get();
                 let ir_per_payout = interest_rate
-                    * Permill::from_rational(
+                    * Perbill::from_rational(
                         T::InterestPayoutPeriod::get(),
                         T::TotalBlocksPerYear::get(),
                     );
-                Accounts::<T>::iter_keys().for_each(|account_id| {
-                    Accounts::<T>::mutate(account_id, |account_data| {
-                        account_data.reserved = account_data
-                            .reserved
-                            .saturating_add(ir_per_payout * account_data.reserved);
+                let total_interest: T::Balance = Accounts::<T>::iter_keys()
+                    .map(|account_id| {
+                        Accounts::<T>::mutate(account_id, |account_data| {
+                            let interest = ir_per_payout * account_data.reserved;
+                            account_data.reserved = account_data.reserved.saturating_add(interest);
+                            interest
+                        })
                     })
+                    .sum();
+                TotalIssuance::<T>::mutate(|total| {
+                    *total = total.saturating_add(total_interest);
+                });
+                Self::deposit_event(Event::<T>::InterestPayed {
+                    interest_rate,
+                    total_interest_payed: total_interest,
                 });
             }
         }
@@ -418,7 +433,7 @@ pub mod module {
                 interest_rate_bps <= 10000u32,
                 Error::<T>::InvalidInterestRate
             );
-            InterestRate::<T>::set(Permill::from_rational(interest_rate_bps, 10000u32));
+            InterestRate::<T>::set(Perbill::from_rational(interest_rate_bps, 10000u32));
             Ok(())
         }
     }
