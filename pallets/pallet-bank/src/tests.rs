@@ -3,12 +3,33 @@
 #![cfg(test)]
 
 use crate::mock::{
-    default_test_ext, AccountId, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
+    default_test_ext, AccountId, Balance, Bank, MockGenesisConfig, Roles, Runtime, RuntimeEvent,
     RuntimeOrigin, StakePeriod, System, TreasuryAccount, ALICE, BOB, INTEREST_PAYOUT_PERIOD,
-    REDEEM_PERIOD,
+    REDEEM_PERIOD, STAKE_PERIOD,
 };
 use crate::*;
 use frame_support::{assert_err, assert_noop, assert_ok};
+
+fn stake(user: AccountId, amount: Balance) {
+    let reserved = Bank::accounts(&user).reserved;
+    let _ = Bank::stake_funds(RuntimeOrigin::signed(user), amount);
+    Bank::on_finalize(System::block_number() + StakePeriod::get());
+    assert_eq!(
+        Bank::accounts(&user).reserved,
+        reserved.saturating_add(amount)
+    );
+    System::assert_has_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
+        user: user.clone(),
+        amount,
+        length: STAKE_PERIOD,
+        reason: LockReason::Stake,
+    }));
+    System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Unlocked {
+        user: user.clone(),
+        amount,
+        reason: UnlockReason::Expired,
+    }));
+}
 
 #[test]
 fn can_deposit() {
@@ -193,8 +214,7 @@ fn can_redeem_funds() {
     MockGenesisConfig::with_balances(vec![(ALICE, 1_000)])
         .build()
         .execute_with(|| {
-            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 1_000));
-            Bank::on_finalize(System::block_number() + StakePeriod::get());
+            stake(ALICE, 1_000);
             System::reset_events();
             assert_ok!(Bank::redeem_funds(RuntimeOrigin::signed(ALICE), 200));
             System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Locked {
@@ -233,8 +253,7 @@ fn auditor_can_lock_funds() {
             let charlie: AccountId = 3u32;
             assert_eq!(Bank::accounts(&charlie), AccountData::default());
             assert_ok!(Roles::register_role(&charlie, Role::Auditor));
-            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
-            Bank::on_finalize(System::block_number() + StakePeriod::get());
+            stake(ALICE, 900);
             System::reset_events();
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
@@ -278,8 +297,7 @@ fn auditor_can_unlock_funds() {
             let charlie: AccountId = 3u32;
             assert_eq!(Bank::accounts(&charlie), AccountData::default());
             assert_ok!(Roles::register_role(&charlie, Role::Auditor));
-            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
-            Bank::on_finalize(System::block_number() + StakePeriod::get());
+            stake(ALICE, 900);
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
                 ALICE,
@@ -352,8 +370,7 @@ fn incorrect_role_cannot_call_auditor_function() {
             assert_ok!(Roles::register_role(&charlie, Role::Auditor));
             assert_eq!(Bank::accounts(&BOB), AccountData::default());
             assert_ok!(Roles::register_role(&BOB, Role::Manager));
-            assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 900));
-            Bank::on_finalize(System::block_number() + StakePeriod::get());
+            stake(ALICE, 900);
             // Auditor can lock and unlock
             assert_ok!(Bank::lock_funds_auditor(
                 RuntimeOrigin::signed(charlie),
@@ -421,6 +438,11 @@ fn manager_can_set_interest_rate() {
             assert_ok!(Roles::register_role(&charlie, Role::Manager));
             assert_ok!(Bank::set_interest_rate(RuntimeOrigin::signed(charlie), 500));
             assert_eq!(InterestRate::<Runtime>::get(), Perbill::from_percent(5));
+            System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::InterestRateSet {
+                manager: charlie,
+                old_interest_rate: Perbill::from_percent(0),
+                new_interest_rate: Perbill::from_percent(5),
+            }));
         });
 }
 
@@ -451,11 +473,7 @@ fn pay_interest() {
             let charlie: AccountId = 3u32;
             assert_ok!(Roles::register_role(&charlie, Role::Manager));
             assert_ok!(Bank::set_interest_rate(RuntimeOrigin::signed(charlie), 500));
-            assert_ok!(Bank::stake_funds(
-                RuntimeOrigin::signed(ALICE),
-                1_000_000_000
-            ));
-            Bank::on_finalize(System::block_number() + StakePeriod::get());
+            stake(ALICE, 1_000_000_000);
             Bank::on_finalize(INTEREST_PAYOUT_PERIOD);
             assert_eq!(
                 Accounts::<Runtime>::get(&ALICE),

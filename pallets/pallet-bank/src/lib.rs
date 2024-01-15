@@ -167,7 +167,14 @@ pub mod module {
             reason: UnlockReason,
         },
 
-        /// Manager payed total interest.
+        /// Manager set the interest rate.
+        InterestRateSet {
+            manager: T::AccountId,
+            old_interest_rate: Perbill,
+            new_interest_rate: Perbill,
+        },
+
+        /// Manager paid total interest.
         InterestPayed {
             interest_rate: Perbill,
             total_interest_payed: T::Balance,
@@ -243,6 +250,7 @@ pub mod module {
             assert!(T::MinimumAmount::get() >= T::ExistentialDeposit::get());
             assert!(T::InterestPayoutPeriod::get() <= T::StakePeriod::get());
             assert!(T::InterestPayoutPeriod::get() <= T::RedeemPeriod::get());
+            assert!(!T::TotalBlocksPerYear::get().is_zero());
         }
 
         fn on_finalize(block_number: BlockNumberFor<T>) {
@@ -259,7 +267,7 @@ pub mod module {
 
             // Pay interest rate.
 
-            // check of we should payout this block
+            // check if we should payout this block
             if (block_number % T::InterestPayoutPeriod::get()).is_zero() {
                 // calculate the scaled interest rate
                 // scaled_ir = ir_pa / blocks_pa * blocks_per_payout
@@ -269,6 +277,7 @@ pub mod module {
                         T::InterestPayoutPeriod::get(),
                         T::TotalBlocksPerYear::get(),
                     );
+                // Pay out interest for all accounts, and tally the sum
                 let total_interest: T::Balance = Accounts::<T>::iter_keys()
                     .map(|account_id| {
                         Accounts::<T>::mutate(account_id, |account_data| {
@@ -433,7 +442,14 @@ pub mod module {
                 interest_rate_bps <= 10000u32,
                 Error::<T>::InvalidInterestRate
             );
+            let old_interest_rate = InterestRate::<T>::get();
             InterestRate::<T>::set(Perbill::from_rational(interest_rate_bps, 10000u32));
+
+            Self::deposit_event(Event::<T>::InterestRateSet {
+                manager: id,
+                old_interest_rate,
+                new_interest_rate: Perbill::from_rational(interest_rate_bps, 10000u32),
+            });
             Ok(())
         }
     }
@@ -615,7 +631,7 @@ impl<T: Config> Pallet<T> {
 
         if total_reaped_amount > Zero::zero() {
             Accounts::<T>::mutate(&T::TreasuryAccount::get(), |treasury_account| {
-                treasury_account.free += total_reaped_amount;
+                treasury_account.free = treasury_account.free.saturating_add(total_reaped_amount);
             });
         }
     }
@@ -623,7 +639,7 @@ impl<T: Config> Pallet<T> {
     /// Get the lock id to store into the LockedFund.
     fn next_lock_id() -> LockId {
         NextLockId::<T>::mutate(|id| {
-            *id += 1u64;
+            *id = id.saturating_add(1);
             *id
         })
     }
@@ -648,9 +664,9 @@ impl<T: Config> Pallet<T> {
                 let unlocked_amount = account_data.locked[index].amount;
 
                 if account_data.locked[index].reason == LockReason::Stake {
-                    account_data.reserved += unlocked_amount;
+                    account_data.reserved = account_data.reserved.saturating_add(unlocked_amount);
                 } else {
-                    account_data.free += unlocked_amount;
+                    account_data.free = account_data.free.saturating_add(unlocked_amount);
                 }
 
                 // Remove the unlocked locked fund from the vector
