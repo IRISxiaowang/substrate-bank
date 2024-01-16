@@ -13,6 +13,9 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+pub mod constants;
+pub use constants::*;
+
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
