@@ -4,8 +4,8 @@
 
 use super::*;
 use frame_support::{
-    construct_runtime, parameter_types,
-    traits::{ConstU32, ConstU64, Everything},
+	construct_runtime, parameter_types,
+	traits::{ConstU32, ConstU64, Everything},
 };
 
 use primitives::YEAR;
@@ -30,103 +30,100 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 type BlockNumber = u64;
 
 impl frame_system::Config for Runtime {
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
-    type Hash = H256;
-    type Hashing = ::sp_runtime::traits::BlakeTwo256;
-    type AccountId = AccountId;
-    type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
-    type BlockHashCount = ConstU64<250>;
-    type BlockWeights = ();
-    type BlockLength = ();
-    type Version = ();
-    type PalletInfo = PalletInfo;
-    type AccountData = ();
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
-    type DbWeight = ();
-    type BaseCallFilter = Everything;
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = ConstU32<16>;
-    type Nonce = u128;
-    type Block = Block;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type Hash = H256;
+	type Hashing = ::sp_runtime::traits::BlakeTwo256;
+	type AccountId = AccountId;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type RuntimeEvent = RuntimeEvent;
+	type BlockHashCount = ConstU64<250>;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type Version = ();
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
+	type DbWeight = ();
+	type BaseCallFilter = Everything;
+	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
+	type Nonce = u128;
+	type Block = Block;
 }
 
 parameter_types! {
-    pub const ExistentialDeposit: Balance = ED;
-    pub const TreasuryAccount: AccountId = TREASURY;
-    pub const MinimumAmount: Balance = MIN;
-    pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
-    pub const StakePeriod: BlockNumber = STAKE_PERIOD;
-    pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
-    pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
+	pub const ExistentialDeposit: Balance = ED;
+	pub const TreasuryAccount: AccountId = TREASURY;
+	pub const MinimumAmount: Balance = MIN;
+	pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
+	pub const StakePeriod: BlockNumber = STAKE_PERIOD;
+	pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
+	pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
 }
 
 impl Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Balance = Balance;
-    type RoleManager = Roles;
-    type BlockNumberProvider = System;
-    type ExistentialDeposit = ExistentialDeposit;
-    type TreasuryAccount = TreasuryAccount;
-    type MinimumAmount = MinimumAmount;
-    type RedeemPeriod = RedeemPeriod;
-    type StakePeriod = StakePeriod;
-    type InterestPayoutPeriod = InterestPayoutPeriod;
-    type TotalBlocksPerYear = TotalBlocksPerYear;
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = Balance;
+	type RoleManager = Roles;
+	type BlockNumberProvider = System;
+	type ExistentialDeposit = ExistentialDeposit;
+	type TreasuryAccount = TreasuryAccount;
+	type MinimumAmount = MinimumAmount;
+	type RedeemPeriod = RedeemPeriod;
+	type StakePeriod = StakePeriod;
+	type InterestPayoutPeriod = InterestPayoutPeriod;
+	type TotalBlocksPerYear = TotalBlocksPerYear;
 }
 
 impl pallet_roles::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 construct_runtime!(
-    pub enum Runtime
-    {
-        System: frame_system,
-        Bank: pallet_bank,
-        Roles: pallet_roles,
-    }
+	pub enum Runtime
+	{
+		System: frame_system,
+		Bank: pallet_bank,
+		Roles: pallet_roles,
+	}
 );
 
 #[derive(Default)]
 pub struct MockGenesisConfig {
-    balances: Vec<(AccountId, Balance)>,
+	balances: Vec<(AccountId, Balance)>,
 }
 
 impl MockGenesisConfig {
-    pub fn with_balances(balances: Vec<(AccountId, Balance)>) -> Self {
-        Self { balances }
-    }
+	pub fn with_balances(balances: Vec<(AccountId, Balance)>) -> Self {
+		Self { balances }
+	}
 
-    pub fn build(self) -> sp_io::TestExternalities {
-        let mut endowed = self.balances;
-        endowed.push((TREASURY, INITIAL_BALANCE));
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut endowed = self.balances;
+		endowed.push((TREASURY, INITIAL_BALANCE));
 
-        let roles = endowed
-            .iter()
-            .map(|(id, _)| (*id, Role::Customer))
-            .collect();
-        let config = RuntimeGenesisConfig {
-            system: frame_system::GenesisConfig::default(),
-            bank: crate::GenesisConfig { balances: endowed },
-            roles: pallet_roles::GenesisConfig { roles },
-        };
+		let roles = endowed.iter().map(|(id, _)| (*id, Role::Customer)).collect();
+		let config = RuntimeGenesisConfig {
+			system: frame_system::GenesisConfig::default(),
+			bank: crate::GenesisConfig { balances: endowed },
+			roles: pallet_roles::GenesisConfig { roles },
+		};
 
-        let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
-        ext.execute_with(|| {
-            System::set_block_number(1);
-        });
+		ext.execute_with(|| {
+			System::set_block_number(1);
+		});
 
-        ext
-    }
+		ext
+	}
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn default_test_ext() -> sp_io::TestExternalities {
-    MockGenesisConfig::default().build()
+	MockGenesisConfig::default().build()
 }

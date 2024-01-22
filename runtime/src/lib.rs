@@ -16,7 +16,7 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature, AccountId32,
+	AccountId32, ApplyExtrinsicResult, MultiSignature,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -46,7 +46,7 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-use primitives::{BlockNumber, YEAR, TREASURY, SLOT_DURATION};
+use primitives::{BlockNumber, SLOT_DURATION, TREASURY, YEAR};
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -106,7 +106,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 1,
 	state_version: 1,
 };
-
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -258,27 +257,27 @@ pub const STAKE_PERIOD: u32 = 150;
 pub const INTEREST_PAYOUT_PERIOD: u32 = 100;
 
 parameter_types! {
-    pub const ExistentialDeposit: Balance = ED;
-    pub TreasuryAccount: AccountId32 = TREASURY.into();
-    pub const MinimumAmount: Balance = MIN;
-    pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
-    pub const StakePeriod: BlockNumber = STAKE_PERIOD;
-    pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
-    pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
+	pub const ExistentialDeposit: Balance = ED;
+	pub TreasuryAccount: AccountId32 = TREASURY.into();
+	pub const MinimumAmount: Balance = MIN;
+	pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
+	pub const StakePeriod: BlockNumber = STAKE_PERIOD;
+	pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
+	pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
 }
 
 impl pallet_bank::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-    type Balance = Balance;
-    type RoleManager = Roles;
-    type BlockNumberProvider = System;
-    type ExistentialDeposit = ExistentialDeposit;
-    type TreasuryAccount = TreasuryAccount;
-    type MinimumAmount = MinimumAmount;
-    type RedeemPeriod = RedeemPeriod;
-    type StakePeriod = StakePeriod;
-    type InterestPayoutPeriod = InterestPayoutPeriod;
-    type TotalBlocksPerYear = TotalBlocksPerYear;
+	type Balance = Balance;
+	type RoleManager = Roles;
+	type BlockNumberProvider = System;
+	type ExistentialDeposit = ExistentialDeposit;
+	type TreasuryAccount = TreasuryAccount;
+	type MinimumAmount = MinimumAmount;
+	type RedeemPeriod = RedeemPeriod;
+	type StakePeriod = StakePeriod;
+	type InterestPayoutPeriod = InterestPayoutPeriod;
+	type TotalBlocksPerYear = TotalBlocksPerYear;
 }
 
 /// Configure the pallet-template in pallets/template.

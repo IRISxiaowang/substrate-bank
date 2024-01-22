@@ -1,15 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //!
 //! This crate contains basic primitive types used within the blockchain codebase.
-//!
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_runtime::{
-    generic,
-    traits::{IdentifyAccount, Verify},
-    MultiSignature,
+	generic,
+	traits::{IdentifyAccount, Verify},
+	MultiSignature,
 };
 use sp_std::prelude::*;
 
@@ -19,14 +18,26 @@ pub use constants::*;
 use serde::{Deserialize, Serialize};
 
 /// Enum representing the different roles that a user can have.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum Role {
-    /// Represents a regular customer role.
-    Customer,
-    /// Represents a manager role with higher privileges.
-    Manager,
-    /// Represents an auditor role responsible for auditing.
-    Auditor,
+	/// Represents a regular customer role.
+	Customer,
+	/// Represents a manager role with higher privileges.
+	Manager,
+	/// Represents an auditor role responsible for auditing.
+	Auditor,
 }
 
 pub use sp_runtime::traits::{BlakeTwo256, Hash as HashT};
@@ -63,10 +74,10 @@ pub type Hash = sp_core::H256;
 pub type Nonce = u32;
 
 /// The balance of an account.
-/// 128-bits (or 38 significant decimal figures) will allow for 10 m currency (`10^7`) at a resolution
-/// to all for one second's worth of an annualised 50% reward be paid to a unit holder (`10^11` unit
-/// denomination), or `10^18` total atomic units, to grow at 50%/year for 51 years (`10^9` multiplier)
-/// for an eventual total of `10^27` units (27 significant decimal figures).
+/// 128-bits (or 38 significant decimal figures) will allow for 10 m currency (`10^7`) at a
+/// resolution to all for one second's worth of an annualised 50% reward be paid to a unit holder
+/// (`10^11` unit denomination), or `10^18` total atomic units, to grow at 50%/year for 51 years
+/// (`10^9` multiplier) for an eventual total of `10^27` units (27 significant decimal figures).
 /// We round denomination to `10^12` (12 SDF), and leave the other redundancy at the upper end so
 /// that 32 bits may be multiplied with a balance in 128 bits without worrying about overflow.
 pub type Balance = u128;

@@ -1,13 +1,13 @@
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GrandpaConfig, RuntimeGenesisConfig, Signature,
-	SudoConfig, SystemConfig, WASM_BINARY, BankConfig, RolesConfig,
+	AccountId, AuraConfig, BalancesConfig, BankConfig, GrandpaConfig, RolesConfig,
+	RuntimeGenesisConfig, Signature, SudoConfig, SystemConfig, WASM_BINARY,
 };
+use primitives::Role;
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use primitives::Role;
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -87,7 +87,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 	))
 }
 
-
 /// Configure initial storage state for FRAME modules.
 fn testnet_genesis(
 	wasm_binary: &[u8],
@@ -119,15 +118,18 @@ fn testnet_genesis(
 			key: Some(root_key),
 		},
 		transaction_payment: Default::default(),
-		bank:BankConfig {
-			balances: roles.iter().filter_map(|acc| if acc.1 == Role::Customer {
-				Some((acc.0.clone(), 1_000_000_000_000_000_000u128))
-			} else {
-				None
-			}).collect::<Vec<_>>(),
+		bank: BankConfig {
+			balances: roles
+				.iter()
+				.filter_map(|acc| {
+					if acc.1 == Role::Customer {
+						Some((acc.0.clone(), 1_000_000_000_000_000_000u128))
+					} else {
+						None
+					}
+				})
+				.collect::<Vec<_>>(),
 		},
-		roles: RolesConfig {
-			roles,
-		}
+		roles: RolesConfig { roles },
 	}
 }

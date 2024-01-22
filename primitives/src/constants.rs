@@ -22,4 +22,4 @@ pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 pub const YEAR: BlockNumber = DAYS * 365;
 
-pub const TREASURY: [u8; 32] = [0xFF;32];
+pub const TREASURY: [u8; 32] = [0xFF; 32];
