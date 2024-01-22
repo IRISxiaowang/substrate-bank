@@ -1,13 +1,25 @@
 #![allow(dead_code)]
+use sp_runtime::AccountId32;
 
 /// Defines all the constants for the project
 use crate::BlockNumber;
 
-// 6 seconds per block, same as Polkadot
-pub const SECONDS_PER_BLOCK: BlockNumber = 6u32;
+/// This determines the average expected block time that we are targeting.
+/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
+/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
+/// up by `pallet_aura` to implement `fn slot_duration()`.
+///
+/// Change this to adjust the block time.
+pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
-// approx. number of seconds in a year: 365 * 24 * 3600
-pub const SECONDS_PER_YEAR: BlockNumber = 31_536_000u32;
+// NOTE: Currently it is not possible to change the slot duration after the chain has started.
+//       Attempting to do so will brick block production.
+pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 
-pub const DAY: BlockNumber = 86_400 / SECONDS_PER_BLOCK;
-pub const YEAR: BlockNumber = SECONDS_PER_YEAR / SECONDS_PER_BLOCK;
+// Time is measured by number of blocks.
+pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
+pub const HOURS: BlockNumber = MINUTES * 60;
+pub const DAYS: BlockNumber = HOURS * 24;
+pub const YEAR: BlockNumber = DAYS * 365;
+
+pub const TREASURY: [u8; 32] = [0xFF;32];

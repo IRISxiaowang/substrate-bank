@@ -1,13 +1,12 @@
-[workspace.package]
-name = "substrate-bank"
-version = "0.1.0"
-edition = "2021"
-
 [workspace]
 members = [
-	"pallets/pallet-bank",
-	"pallets/pallet-template",
-	"pallets/pallet-roles",
+    "node",
+    "pallets/pallet-template",
+    "pallets/pallet-roles",
+    "pallets/pallet-bank",
 	"primitives",
 	"traits",
+    "runtime",
 ]
+[profile.release]
+panic = "unwind"

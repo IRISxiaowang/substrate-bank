@@ -1,3 +1,1 @@
-# AccountRole module
-
-## Overview
+License: MIT-0

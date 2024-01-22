@@ -54,15 +54,9 @@ pub mod module {
     pub type AccountRoles<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Role>;
 
     #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
         pub roles: Vec<(T::AccountId, Role)>,
-    }
-
-    #[cfg(feature = "std")]
-    impl<T: Config> Default for GenesisConfig<T> {
-        fn default() -> Self {
-            GenesisConfig { roles: vec![] }
-        }
     }
 
     #[pallet::genesis_build]

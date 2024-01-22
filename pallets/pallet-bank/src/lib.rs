@@ -206,15 +206,9 @@ pub mod module {
     pub type InterestRate<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
     #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
         pub balances: Vec<(T::AccountId, T::Balance)>,
-    }
-
-    #[cfg(feature = "std")]
-    impl<T: Config> Default for GenesisConfig<T> {
-        fn default() -> Self {
-            GenesisConfig { balances: vec![] }
-        }
     }
 
     #[pallet::genesis_build]

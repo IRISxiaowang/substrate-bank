@@ -16,12 +16,10 @@ use sp_std::prelude::*;
 pub mod constants;
 pub use constants::*;
 
-#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
 /// Enum representing the different roles that a user can have.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
 pub enum Role {
     /// Represents a regular customer role.
     Customer,
