@@ -32,6 +32,7 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_roles.
 pub trait WeightInfo {
 	fn register() -> Weight;
+	fn unregister() -> Weight;
 }
 
 /// Weights for pallet_roles using the Substrate node and recommended hardware.
@@ -48,6 +49,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: `Roles::AccountRoles` (r:1 w:1)
+	/// Proof: `Roles::AccountRoles` (`max_values`: None, `max_size`: Some(49), added: 2524, mode: `MaxEncodedLen`)
+	fn unregister() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `253`
+		//  Estimated: `3514`
+		// Minimum execution time: 14_000_000 picoseconds.
+		Weight::from_parts(15_000_000, 3514)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -60,6 +72,17 @@ impl WeightInfo for () {
 		//  Estimated: `3514`
 		// Minimum execution time: 13_000_000 picoseconds.
 		Weight::from_parts(14_000_000, 3514)
+			.saturating_add(RocksDbWeight::get().reads(1_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: `Roles::AccountRoles` (r:1 w:1)
+	/// Proof: `Roles::AccountRoles` (`max_values`: None, `max_size`: Some(49), added: 2524, mode: `MaxEncodedLen`)
+	fn unregister() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `253`
+		//  Estimated: `3514`
+		// Minimum execution time: 14_000_000 picoseconds.
+		Weight::from_parts(15_000_000, 3514)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}

@@ -82,6 +82,7 @@ impl Config for Runtime {
 
 impl pallet_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
 }
 
 construct_runtime!(

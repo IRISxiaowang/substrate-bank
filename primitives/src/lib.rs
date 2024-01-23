@@ -57,10 +57,6 @@ pub type Signature = MultiSignature;
 /// also isn't a fixed size when encoded, as different cryptos have different size public keys.
 pub type AccountPublic = <Signature as Verify>::Signer;
 
-/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
-/// 32 bytes.
-pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
-
 /// The type for looking up accounts. We don't expect more than 4 billion of them.
 pub type AccountIndex = u32;
 
@@ -94,3 +90,7 @@ pub use sp_runtime::OpaqueExtrinsic as UncheckedExtrinsic;
 
 /// Lock Id
 pub type LockId = u64;
+
+/// Some way of identifying an account on the chain. We intentionally make it equivalent
+/// to the public key of our transaction signing scheme.
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;

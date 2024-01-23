@@ -96,7 +96,7 @@ pub mod module {
 		/// This function allows a user's role to be unregistered.
 		/// The user must be signed and authenticated.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unregister())]
 		pub fn unregister(origin: OriginFor<T>) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			Self::unregister_role(&id)

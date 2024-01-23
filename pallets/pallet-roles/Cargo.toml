@@ -27,7 +27,7 @@ traits = { path = "../../traits", default-features = false }
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 
 [features]
-default = ["std", "runtime-benchmarks"]
+default = ["std"]
 std = [
 	"codec/std",
 	"scale-info/std",
