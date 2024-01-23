@@ -19,9 +19,11 @@ use traits::{BasicAccounting, ManageRoles, Stakable};
 mod mock;
 mod tests;
 
-mod weights;
+pub mod weights;
+pub use weights::*;
 
-pub use weights::WeightInfo;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum LockReason {
@@ -71,6 +73,9 @@ pub mod module {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 
 		/// The balance type
 		type Balance: Member
@@ -278,7 +283,7 @@ pub mod module {
 		///
 		/// Requires Manager.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::deposit())]
 		pub fn deposit(
 			origin: OriginFor<T>,
 			user: T::AccountId,

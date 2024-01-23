@@ -67,6 +67,7 @@ parameter_types! {
 
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;

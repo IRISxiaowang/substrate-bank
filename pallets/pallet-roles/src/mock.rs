@@ -45,6 +45,7 @@ parameter_types! {}
 
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;

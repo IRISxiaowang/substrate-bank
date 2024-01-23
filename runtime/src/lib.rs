@@ -268,6 +268,7 @@ parameter_types! {
 
 impl pallet_bank::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_bank::weights::SubstrateWeight<Runtime>;
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
@@ -283,6 +284,7 @@ impl pallet_bank::Config for Runtime {
 /// Configure the pallet-template in pallets/template.
 impl pallet_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_roles::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
