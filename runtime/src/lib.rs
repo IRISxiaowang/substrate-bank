@@ -46,23 +46,9 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-use primitives::{BlockNumber, SLOT_DURATION, TREASURY, YEAR};
-
-/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
-pub type Signature = MultiSignature;
-
-/// Some way of identifying an account on the chain. We intentionally make it equivalent
-/// to the public key of our transaction signing scheme.
-pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
-/// Balance of an account.
-pub type Balance = u128;
-
-/// Index of a transaction in the chain.
-pub type Nonce = u32;
-
-/// A hash of some data used by the chain.
-pub type Hash = sp_core::H256;
+use primitives::{
+	AccountId, Balance, BlockNumber, Hash, Nonce, Signature, SLOT_DURATION, TREASURY, YEAR,
+};
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -268,6 +254,7 @@ parameter_types! {
 
 impl pallet_bank::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_bank::weights::SubstrateWeight<Runtime>;
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
@@ -283,6 +270,7 @@ impl pallet_bank::Config for Runtime {
 /// Configure the pallet-template in pallets/template.
 impl pallet_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_roles::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

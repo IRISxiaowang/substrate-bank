@@ -13,9 +13,11 @@ use traits::ManageRoles;
 mod mock;
 mod tests;
 
-mod weights;
+pub mod weights;
+pub use weights::*;
 
-pub use weights::WeightInfo;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 pub use module::*;
 
@@ -27,6 +29,8 @@ pub mod module {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -81,7 +85,7 @@ pub mod module {
 		/// Params:
 		/// - `role`: The role to assign to the user.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::register())]
 		pub fn register(origin: OriginFor<T>, role: Role) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			Self::register_role(&id, role)
@@ -92,7 +96,7 @@ pub mod module {
 		/// This function allows a user's role to be unregistered.
 		/// The user must be signed and authenticated.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unregister())]
 		pub fn unregister(origin: OriginFor<T>) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			Self::unregister_role(&id)

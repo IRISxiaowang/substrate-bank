@@ -1,8 +1,8 @@
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, BankConfig, GrandpaConfig, RolesConfig,
-	RuntimeGenesisConfig, Signature, SudoConfig, SystemConfig, WASM_BINARY,
+	AuraConfig, BalancesConfig, BankConfig, GrandpaConfig, RolesConfig, RuntimeGenesisConfig,
+	SudoConfig, SystemConfig, WASM_BINARY,
 };
-use primitives::Role;
+use primitives::{AccountId, Role, Signature};
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;

@@ -5,14 +5,14 @@
 use crate::service::FullClient;
 
 use node_template_runtime as runtime;
-use runtime::{AccountId, Balance, BalancesCall, SystemCall};
+use primitives::{AccountId, Balance};
+use runtime::{BalancesCall, SystemCall};
 use sc_cli::Result;
 use sc_client_api::BlockBackend;
 use sp_core::{Encode, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{OpaqueExtrinsic, SaturatedConversion};
-
 use std::{sync::Arc, time::Duration};
 
 /// Generates extrinsics for the `benchmark overhead` command.
@@ -142,7 +142,7 @@ pub fn create_benchmark_extrinsic(
 	runtime::UncheckedExtrinsic::new_signed(
 		call,
 		sp_runtime::AccountId32::from(sender.public()).into(),
-		runtime::Signature::Sr25519(signature),
+		primitives::Signature::Sr25519(signature),
 		extra,
 	)
 }

@@ -19,9 +19,11 @@ use traits::{BasicAccounting, ManageRoles, Stakable};
 mod mock;
 mod tests;
 
-mod weights;
+pub mod weights;
+pub use weights::*;
 
-pub use weights::WeightInfo;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum LockReason {
@@ -71,6 +73,9 @@ pub mod module {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 
 		/// The balance type
 		type Balance: Member
@@ -278,7 +283,7 @@ pub mod module {
 		///
 		/// Requires Manager.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::deposit())]
 		pub fn deposit(
 			origin: OriginFor<T>,
 			user: T::AccountId,
@@ -293,7 +298,7 @@ pub mod module {
 		///
 		/// Requires Manager.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::withdraw())]
 		pub fn withdraw(
 			origin: OriginFor<T>,
 			user: T::AccountId,
@@ -306,7 +311,7 @@ pub mod module {
 
 		/// Transfer `amount` of fund from the current user to another user.
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
 			to_user: T::AccountId,
@@ -320,7 +325,7 @@ pub mod module {
 
 		/// Stake `amount` of fund from the current user's free account to reserved account.
 		#[pallet::call_index(3)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::stake_funds())]
 		pub fn stake_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
 			let user = ensure_signed(origin)?;
 			T::RoleManager::ensure_role(&user, Role::Customer)?;
@@ -329,7 +334,7 @@ pub mod module {
 
 		/// Redeem `amount` of fund from the current user's reserved account to locked account.
 		#[pallet::call_index(4)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::redeem_funds())]
 		pub fn redeem_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
 			let user = ensure_signed(origin)?;
 			T::RoleManager::ensure_role(&user, Role::Customer)?;
@@ -338,7 +343,7 @@ pub mod module {
 		/// Auditor locked `amount` of fund from the any user's account to locked account for some
 		/// period. Funds are taken from "free" first, then from "reserved".
 		#[pallet::call_index(5)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::lock_funds_auditor())]
 		pub fn lock_funds_auditor(
 			origin: OriginFor<T>,
 			user: T::AccountId,
@@ -386,7 +391,7 @@ pub mod module {
 		/// Auditor unlocked the LockId which free the `amount` of fund from the user locked by
 		/// auditor. Funds are returned from "locked" to "free".
 		#[pallet::call_index(6)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unlock_funds_auditor())]
 		pub fn unlock_funds_auditor(
 			origin: OriginFor<T>,
 			user: T::AccountId,
@@ -405,7 +410,7 @@ pub mod module {
 		///
 		/// Requires Manager.
 		#[pallet::call_index(7)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_interest_rate())]
 		pub fn set_interest_rate(origin: OriginFor<T>, interest_rate_bps: u32) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			T::RoleManager::ensure_role(&id, Role::Manager)?;
