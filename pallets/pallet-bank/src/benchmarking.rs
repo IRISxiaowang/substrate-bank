@@ -40,7 +40,7 @@ mod benchmarks {
 				free: 1_000_000u128.into(),
 				reserved: 1_000_000u128.into(),
 				locked: vec![LockedFund {
-					id: 1u64.into(),
+					id: 1u64,
 					amount: 1_000u128.into(),
 					reason: LockReason::Auditor,
 				}],
@@ -142,7 +142,7 @@ mod benchmarks {
 			AccountData {
 				free: free_balance - amount,
 				reserved: reserved_balance,
-				locked: vec![LockedFund { id: 1u64.into(), amount, reason: LockReason::Auditor },]
+				locked: vec![LockedFund { id: 1u64, amount, reason: LockReason::Auditor },]
 			}
 		);
 	}
@@ -157,7 +157,7 @@ mod benchmarks {
 		unlock_funds_auditor(
 			RawOrigin::Signed(accounts.auditor.clone()),
 			accounts.customer_2.clone(),
-			1u64.into(),
+			1u64,
 		);
 
 		// Verify

@@ -1,0 +1,9 @@
+[alias]
+ic-test = "test --lib --features runtime-benchmarks,try-runtime"
+
+ic-clippy = "clippy --all-targets --features runtime-benchmarks,try-runtime -- -D warnings"
+
+ic-build = "build --release --features runtime-benchmarks,try-runtime"
+
+
+

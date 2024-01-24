@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use sp_runtime::AccountId32;
 
 /// Defines all the constants for the project
 use crate::BlockNumber;

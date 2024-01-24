@@ -207,7 +207,7 @@ pub mod module {
                     	*initial_balance >= T::ExistentialDeposit::get(),
                     	"the balance of any account should always be more than existential deposit.",
                     );
-					let _ = T::RoleManager::register_role(&account_id, Role::Customer);
+					let _ = T::RoleManager::register_role(account_id, Role::Customer);
 					Accounts::<T>::mutate(account_id, |account_data| {
 						account_data.free = *initial_balance
 					});
@@ -237,7 +237,7 @@ pub mod module {
 			Self::reap_accounts();
 
 			// Unlock funds that are due.
-			AccountWithUnlockedFund::<T>::take(&block_number).into_iter().for_each(
+			AccountWithUnlockedFund::<T>::take(block_number).into_iter().for_each(
 				|(user, lock_id)| {
 					// Ignore the unlock result - locks can be unlocked early by other means.
 					let _ = Self::unlock(&user, lock_id, UnlockReason::Expired);
@@ -433,7 +433,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 		if amount < T::MinimumAmount::get() {
 			return Err(Error::<T>::AmountTooSmall.into());
 		}
-		Self::mint(&user, amount)?;
+		Self::mint(user, amount)?;
 		Self::deposit_event(Event::<T>::Deposited { user: user.clone(), amount });
 		Ok(())
 	}
@@ -442,7 +442,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 		if amount < T::MinimumAmount::get() {
 			return Err(Error::<T>::AmountTooSmall.into());
 		}
-		Self::burn(&user, amount)?;
+		Self::burn(user, amount)?;
 		Self::deposit_event(Event::<T>::Withdrew { user: user.clone(), amount });
 		Ok(())
 	}
@@ -451,7 +451,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 		if amount < T::MinimumAmount::get() {
 			return Err(Error::<T>::AmountTooSmall.into());
 		}
-		Accounts::<T>::mutate(&from, |balance| -> DispatchResult {
+		Accounts::<T>::mutate(from, |balance| -> DispatchResult {
 			if balance.free >= amount {
 				balance.free -= amount;
 				Ok(())
@@ -459,7 +459,7 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 				Err(Error::<T>::InsufficientBalance.into())
 			}
 		})?;
-		Accounts::<T>::mutate(&to, |balance| {
+		Accounts::<T>::mutate(to, |balance| {
 			balance.free = balance.free.saturating_add(amount);
 		});
 		Self::deposit_event(Event::Transferred { from: from.clone(), to: to.clone(), amount });
@@ -470,9 +470,9 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 	/// Stake funds from free to reserved
 	fn stake_funds(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		T::RoleManager::ensure_role(&user, Role::Customer)?;
+		T::RoleManager::ensure_role(user, Role::Customer)?;
 		ensure!(amount >= T::MinimumAmount::get(), Error::<T>::AmountTooSmall);
-		Accounts::<T>::mutate(&user, |account| -> DispatchResult {
+		Accounts::<T>::mutate(user, |account| -> DispatchResult {
 			ensure!(account.free >= amount, Error::<T>::InsufficientBalance);
 			account.free -= amount;
 			let new_locked_fund =
@@ -496,14 +496,14 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 
 	/// Redeem funds from reserved to free after a certain time
 	fn redeem_funds(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		T::RoleManager::ensure_role(&user, Role::Customer)?;
+		T::RoleManager::ensure_role(user, Role::Customer)?;
 		ensure!(amount >= T::MinimumAmount::get(), Error::<T>::AmountTooSmall);
 
 		// get unlock BlockNumber
 		let unlock = T::BlockNumberProvider::current_block_number() + T::RedeemPeriod::get();
 
 		// Add new locked funds to user's Account Data
-		Accounts::<T>::mutate(&user, |account| -> DispatchResult {
+		Accounts::<T>::mutate(user, |account| -> DispatchResult {
 			ensure!(account.reserved >= amount, Error::<T>::InsufficientBalance);
 			account.reserved -= amount;
 			let new_locked_fund =
@@ -528,8 +528,8 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Burn some fund from a user's account.
 	fn burn(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		T::RoleManager::ensure_role(&user, Role::Customer)?;
-		Accounts::<T>::mutate(&user, |balance| -> DispatchResult {
+		T::RoleManager::ensure_role(user, Role::Customer)?;
+		Accounts::<T>::mutate(user, |balance| -> DispatchResult {
 			if balance.free >= amount {
 				balance.free -= amount;
 				Ok(())
@@ -545,9 +545,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Mint some fund into a user's account.
 	fn mint(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		T::RoleManager::ensure_role(&user, Role::Customer)?;
+		T::RoleManager::ensure_role(user, Role::Customer)?;
 
-		Accounts::<T>::mutate(&user, |balance| {
+		Accounts::<T>::mutate(user, |balance| {
 			balance.free = balance.free.saturating_add(amount);
 		});
 		TotalIssuance::<T>::mutate(|total| {
@@ -569,7 +569,7 @@ impl<T: Config> Pallet<T> {
 			.filter(|(_id, balance)| balance.total() < T::ExistentialDeposit::get())
 			.map(|(id, balance)| {
 				Self::deposit_event(Event::Reaped { user: id.clone(), dust: balance.total() });
-				Accounts::<T>::remove(&id);
+				Accounts::<T>::remove(id);
 				balance.total()
 			})
 			.sum();
