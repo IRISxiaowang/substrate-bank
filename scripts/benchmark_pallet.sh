@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# usage: ./scripts/benchmark.sh palletname
+# usage: ./scripts/benchmark_pallet.sh palletname
 
 cargo build --release --features runtime-benchmarks
 # execute the benchmark for $palletame

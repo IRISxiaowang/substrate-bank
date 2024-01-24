@@ -79,8 +79,8 @@ mod benchmarks {
 	fn transfer() {
 		let accounts = setup::<T>();
 		let amount = 1_000u128.into();
-		let initial_balance = Accounts::<T>::get(&accounts.customer_1).free;
-
+		let initial_balance_1 = Accounts::<T>::get(&accounts.customer_1).free;
+		let initial_balance_2 = Accounts::<T>::get(&accounts.customer_2).free;
 		#[extrinsic_call]
 		transfer(
 			RawOrigin::Signed(accounts.customer_1.clone()),
@@ -89,8 +89,8 @@ mod benchmarks {
 		);
 
 		// Verify
-		assert_eq!(Accounts::<T>::get(&accounts.customer_1).free, initial_balance - amount);
-		assert_eq!(Accounts::<T>::get(&accounts.customer_2).free, initial_balance + amount);
+		assert_eq!(Accounts::<T>::get(&accounts.customer_1).free, initial_balance_1 - amount);
+		assert_eq!(Accounts::<T>::get(&accounts.customer_2).free, initial_balance_2 + amount);
 	}
 
 	#[benchmark]
@@ -126,6 +126,7 @@ mod benchmarks {
 		let accounts = setup::<T>();
 		let amount = 1_000u128.into();
 		let free_balance = Accounts::<T>::get(&accounts.customer_1).free;
+		let reserved_balance = Accounts::<T>::get(&accounts.customer_1).reserved;
 
 		#[extrinsic_call]
 		lock_funds_auditor(
@@ -136,9 +137,14 @@ mod benchmarks {
 		);
 
 		// Verify
-		assert_eq!(Accounts::<T>::get(&accounts.customer_1).free, free_balance - amount);
-		assert_eq!(Accounts::<T>::get(&accounts.customer_1).locked[0].amount, amount);
-		assert_eq!(Accounts::<T>::get(&accounts.customer_1).locked[0].reason, LockReason::Auditor);
+		assert_eq!(
+			Accounts::<T>::get(&accounts.customer_1),
+			AccountData {
+				free: free_balance - amount,
+				reserved: reserved_balance,
+				locked: vec![LockedFund { id: 1u64.into(), amount, reason: LockReason::Auditor },]
+			}
+		);
 	}
 
 	#[benchmark]
