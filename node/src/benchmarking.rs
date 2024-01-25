@@ -4,7 +4,6 @@
 
 use crate::service::FullClient;
 
-use node_template_runtime as runtime;
 use primitives::{AccountId, Balance};
 use runtime::{BalancesCall, SystemCall};
 use sc_cli::Result;
@@ -14,6 +13,7 @@ use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::{OpaqueExtrinsic, SaturatedConversion};
 use std::{sync::Arc, time::Duration};
+use xy_chain_runtime as runtime;
 
 /// Generates extrinsics for the `benchmark overhead` command.
 ///

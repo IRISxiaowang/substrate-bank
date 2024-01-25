@@ -8,7 +8,7 @@
 //! EXECUTION: , WASM-EXECUTION: Compiled, CHAIN: None, DB CACHE: 1024
 
 // Executed Command:
-// ./target/release/node-template
+// ./target/release/xy-chain
 // benchmark
 // pallet
 // --extrinsic
