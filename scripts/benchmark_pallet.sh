@@ -4,7 +4,7 @@
 
 cargo build --release --features runtime-benchmarks
 # execute the benchmark for $palletame
-./target/release/node-template benchmark pallet \
+./target/release/xy-chain benchmark pallet \
     --extrinsic '*' \
     --pallet pallet_$1 \
     --output ./pallets/pallet-$1/src/weights.rs \
