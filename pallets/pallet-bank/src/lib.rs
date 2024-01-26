@@ -97,9 +97,6 @@ pub mod module {
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		#[pallet::constant]
-		type TreasuryAccount: Get<Self::AccountId>;
-
-		#[pallet::constant]
 		type MinimumAmount: Get<Self::Balance>;
 
 		#[pallet::constant]
@@ -127,6 +124,10 @@ pub mod module {
 		InvalidInterestRate,
 		/// No lock corresponds to the given lock Id.
 		InvalidLockId,
+		/// The treasury account storage is not set.
+		TreasuryAccountNotSet,
+		/// The account already exists.
+		AccountIdAlreadyTaken,
 	}
 
 	#[pallet::event]
@@ -189,6 +190,10 @@ pub mod module {
 	/// Stores the interest rate.
 	#[pallet::storage]
 	pub type InterestRate<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+
+	/// Stores the treasury account.
+	#[pallet::storage]
+	pub type TreasuryAccount<T: Config> = StorageValue<_, T::AccountId>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
@@ -425,6 +430,28 @@ pub mod module {
 			});
 			Ok(())
 		}
+
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::rotate_treasury())]
+		pub fn rotate_treasury(origin: OriginFor<T>, new_treasury: T::AccountId) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(!Accounts::<T>::contains_key(&new_treasury), Error::<T>::AccountIdAlreadyTaken);
+			let old_treasury = Self::treasury()?;
+			// Iterate over the storage map
+			AccountWithUnlockedFund::<T>::iter().for_each(|(block_number, mut accounts)| {
+				accounts.iter_mut().for_each(|(user_id, _)| {
+					if *user_id == old_treasury {
+						*user_id = new_treasury.clone();
+					}
+				});
+				// Update the storage map with the modified accounts
+				AccountWithUnlockedFund::<T>::insert(block_number, accounts);
+			});
+
+			Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(old_treasury));
+			TreasuryAccount::<T>::set(Some(new_treasury));
+			Ok(())
+		}
 	}
 }
 
@@ -565,19 +592,22 @@ impl<T: Config> Pallet<T> {
 	/// Reaps funds from accounts that have balances below the Existential Deposit (ED).
 	/// Reaped funds are transferred to the Treasury account.
 	fn reap_accounts() {
-		let total_reaped_amount = Accounts::<T>::iter()
-			.filter(|(_id, balance)| balance.total() < T::ExistentialDeposit::get())
-			.map(|(id, balance)| {
-				Self::deposit_event(Event::Reaped { user: id.clone(), dust: balance.total() });
-				Accounts::<T>::remove(id);
-				balance.total()
-			})
-			.sum();
+		if let Ok(treasury) = Self::treasury() {
+			let total_reaped_amount = Accounts::<T>::iter()
+				.filter(|(_id, balance)| balance.total() < T::ExistentialDeposit::get())
+				.map(|(id, balance)| {
+					Self::deposit_event(Event::Reaped { user: id.clone(), dust: balance.total() });
+					Accounts::<T>::remove(id);
+					balance.total()
+				})
+				.sum();
 
-		if total_reaped_amount > Zero::zero() {
-			Accounts::<T>::mutate(&T::TreasuryAccount::get(), |treasury_account| {
-				treasury_account.free = treasury_account.free.saturating_add(total_reaped_amount);
-			});
+			if total_reaped_amount > Zero::zero() {
+				Accounts::<T>::mutate(&treasury, |treasury_account| {
+					treasury_account.free =
+						treasury_account.free.saturating_add(total_reaped_amount);
+				});
+			}
 		}
 	}
 
@@ -622,5 +652,9 @@ impl<T: Config> Pallet<T> {
 				Err(Error::<T>::InvalidLockId.into())
 			}
 		})
+	}
+
+	fn treasury() -> Result<T::AccountId, DispatchError> {
+		TreasuryAccount::<T>::get().ok_or(Error::<T>::TreasuryAccountNotSet.into())
 	}
 }

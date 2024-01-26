@@ -5,12 +5,13 @@
 use crate::{
 	mock::{
 		default_test_ext, AccountId, Balance, Bank, MockGenesisConfig, Roles, Runtime,
-		RuntimeEvent, RuntimeOrigin, StakePeriod, System, TreasuryAccount, ALICE, BOB,
-		INTEREST_PAYOUT_PERIOD, REDEEM_PERIOD, STAKE_PERIOD,
+		RuntimeEvent, RuntimeOrigin, StakePeriod, System, ALICE, BOB, INTEREST_PAYOUT_PERIOD,
+		REDEEM_PERIOD, STAKE_PERIOD, TREASURY,
 	},
 	*,
 };
 use frame_support::{assert_err, assert_noop, assert_ok};
+use frame_system::RawOrigin;
 
 fn stake(user: AccountId, amount: Balance) {
 	let reserved = Bank::accounts(user).reserved;
@@ -151,8 +152,9 @@ fn cannot_dealwith_smaller_than_min() {
 }
 
 #[test]
-fn can_reaped() {
+fn can_reap_accounts() {
 	default_test_ext().execute_with(|| {
+		TreasuryAccount::<Runtime>::set(Some(TREASURY));
 		let charlie: AccountId = 3u32;
 		assert_eq!(Bank::accounts(ALICE), AccountData::default());
 		assert_eq!(Bank::accounts(BOB), AccountData::default());
@@ -168,14 +170,15 @@ fn can_reaped() {
 		assert_eq!(Accounts::<Runtime>::get(ALICE).free, 98);
 
 		System::reset_events();
-		Bank::reap_accounts();
+		Bank::on_finalize(1);
 		System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Reaped {
 			user: BOB,
 			dust: 2,
 		}));
 		assert_eq!(Accounts::<Runtime>::get(BOB), Default::default());
-		assert_eq!(Accounts::<Runtime>::get(TreasuryAccount::get()).free, 1_000_002);
+		let treasury = Bank::treasury().expect("Treasury account must be set.");
 
+		assert_eq!(Accounts::<Runtime>::get(treasury).free, 1_000_002);
 		assert!(Bank::check_total_issuance());
 	});
 }
@@ -420,4 +423,118 @@ fn pay_interest() {
 			}));
 			assert!(Bank::check_total_issuance());
 		});
+}
+
+#[test]
+fn can_rotate_treasury() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
+		// Setup old treasury account and data
+		let new_treasury = 10u32;
+		TreasuryAccount::<Runtime>::set(Some(TREASURY));
+		let account_data = AccountData {
+			free: 1_000_000_000,
+			reserved: 500,
+			locked: vec![
+				LockedFund { id: 1, amount: 1_000, reason: LockReason::Auditor },
+				LockedFund { id: 2, amount: 2_000, reason: LockReason::Redeem },
+			],
+		};
+		Accounts::<Runtime>::insert(TREASURY, account_data.clone());
+		assert_eq!(Bank::treasury(), Ok(TREASURY));
+
+		// Rotate treasury account
+		assert_ok!(Bank::rotate_treasury(RawOrigin::Root.into(), new_treasury));
+
+		// Verify all data are migrated
+		assert_eq!(Bank::treasury(), Ok(new_treasury));
+		assert_eq!(TreasuryAccount::<Runtime>::get(), Some(new_treasury));
+		assert_eq!(Accounts::<Runtime>::get(new_treasury), account_data);
+	});
+}
+
+#[test]
+fn incorrect_role_cannot_rotate_treasury() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
+		TreasuryAccount::<Runtime>::set(Some(TREASURY));
+		let new_treasury = 10u32;
+		let charlie: AccountId = 3u32;
+		assert_ok!(Roles::register_role(&charlie, Role::Auditor));
+		assert_ok!(Roles::register_role(&BOB, Role::Manager));
+
+		assert_err!(
+			Bank::rotate_treasury(RuntimeOrigin::signed(charlie), new_treasury),
+			sp_runtime::DispatchError::BadOrigin
+		);
+		assert_err!(
+			Bank::rotate_treasury(RuntimeOrigin::signed(BOB), new_treasury),
+			sp_runtime::DispatchError::BadOrigin
+		);
+		assert_err!(
+			Bank::rotate_treasury(RuntimeOrigin::signed(ALICE), new_treasury),
+			sp_runtime::DispatchError::BadOrigin
+		);
+
+		assert_eq!(TreasuryAccount::<Runtime>::get(), Some(TREASURY));
+		assert_eq!(Accounts::<Runtime>::get(TREASURY).free, 1_000_000);
+		assert!(Bank::check_total_issuance());
+	});
+}
+
+#[test]
+fn test_error_can_display_in_treasury() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
+		let new_treasury = 10u32;
+		let collision_account: u32 = ALICE;
+		assert_err!(Bank::treasury(), Error::<Runtime>::TreasuryAccountNotSet);
+		TreasuryAccount::<Runtime>::set(Some(TREASURY));
+
+		assert_err!(
+			Bank::rotate_treasury(RawOrigin::Root.into(), collision_account),
+			Error::<Runtime>::AccountIdAlreadyTaken
+		);
+		assert_ok!(Bank::rotate_treasury(RawOrigin::Root.into(), new_treasury));
+
+		assert_eq!(TreasuryAccount::<Runtime>::get(), Some(new_treasury));
+		assert_eq!(Accounts::<Runtime>::get(new_treasury).free, 1_000_000);
+		assert!(Bank::check_total_issuance());
+	});
+}
+
+#[test]
+fn funds_can_unlock_after_treasury_rotation() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 1_000)]).build().execute_with(|| {
+		TreasuryAccount::<Runtime>::set(Some(TREASURY));
+		let initial_block = 10;
+		let lock_period = 20;
+		let unlock_block = 10 + 20;
+		let treasury_initial = Accounts::<Runtime>::get(TREASURY).free;
+		System::set_block_number(initial_block);
+
+		let new_treasury = 10u32;
+		assert_ok!(Roles::register_role(&BOB, Role::Auditor));
+
+		assert_ok!(Bank::lock_funds_auditor(RuntimeOrigin::signed(BOB), ALICE, 100, lock_period));
+		assert_ok!(Bank::lock_funds_auditor(
+			RuntimeOrigin::signed(BOB),
+			TREASURY,
+			100,
+			lock_period
+		));
+		assert_eq!(Accounts::<Runtime>::get(ALICE).locked.len(), 1);
+		assert_eq!(Accounts::<Runtime>::get(TREASURY).locked.len(), 1);
+
+		assert_ok!(Bank::rotate_treasury(RuntimeOrigin::root(), new_treasury));
+		assert_eq!(Accounts::<Runtime>::get(new_treasury).locked.len(), 1);
+
+		// Should unlock all funds
+		Bank::on_finalize(unlock_block);
+
+		assert!(Accounts::<Runtime>::get(ALICE).locked.is_empty());
+		assert!(Accounts::<Runtime>::get(new_treasury).locked.is_empty());
+
+		assert_eq!(Accounts::<Runtime>::get(ALICE).free, 1_000);
+		assert_eq!(Accounts::<Runtime>::get(new_treasury).free, treasury_initial);
+
+		assert!(Bank::check_total_issuance());
+	});
 }

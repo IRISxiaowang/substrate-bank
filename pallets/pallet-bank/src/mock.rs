@@ -57,7 +57,6 @@ impl frame_system::Config for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: Balance = ED;
-	pub const TreasuryAccount: AccountId = TREASURY;
 	pub const MinimumAmount: Balance = MIN;
 	pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
 	pub const StakePeriod: BlockNumber = STAKE_PERIOD;
@@ -72,7 +71,6 @@ impl Config for Runtime {
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
 	type ExistentialDeposit = ExistentialDeposit;
-	type TreasuryAccount = TreasuryAccount;
 	type MinimumAmount = MinimumAmount;
 	type RedeemPeriod = RedeemPeriod;
 	type StakePeriod = StakePeriod;
