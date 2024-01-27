@@ -257,7 +257,6 @@ impl pallet_bank::Config for Runtime {
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
 	type ExistentialDeposit = ExistentialDeposit;
-	type TreasuryAccount = TreasuryAccount;
 	type MinimumAmount = MinimumAmount;
 	type RedeemPeriod = RedeemPeriod;
 	type StakePeriod = StakePeriod;

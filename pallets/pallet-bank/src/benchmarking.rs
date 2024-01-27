@@ -177,5 +177,17 @@ mod benchmarks {
 		assert_eq!(InterestRate::<T>::get(), interest_rate);
 	}
 
+	#[benchmark]
+	fn rotate_treasury() {
+		let treasury = account("treasury", 0u32, 0u32);
+		let new_treasury: T::AccountId = account("new_treasury", 0u32, 0u32);
+		TreasuryAccount::<T>::set(Some(treasury));
+		#[extrinsic_call]
+		rotate_treasury(RawOrigin::Root, new_treasury.clone());
+
+		// Verify
+		assert_eq!(TreasuryAccount::<T>::get(), Some(new_treasury));
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::default_test_ext(), crate::mock::Runtime);
 }
