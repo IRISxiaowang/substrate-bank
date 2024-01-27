@@ -165,6 +165,9 @@ pub mod module {
 
 		/// Manager paid total interest.
 		InterestPayed { interest_rate: Perbill, total_interest_payed: T::Balance },
+
+		/// TreasuryAccount rotated.
+		TreasuryAccountRotated { old: T::AccountId, new: T::AccountId },
 	}
 
 	/// The balance of a token type under an account.
@@ -437,7 +440,7 @@ pub mod module {
 			ensure_root(origin)?;
 			ensure!(!Accounts::<T>::contains_key(&new_treasury), Error::<T>::AccountIdAlreadyTaken);
 			let old_treasury = Self::treasury()?;
-			// Iterate over the storage map
+			// Update lock expiry of old treasury to the new treasury account.
 			AccountWithUnlockedFund::<T>::iter().for_each(|(block_number, mut accounts)| {
 				accounts.iter_mut().for_each(|(user_id, _)| {
 					if *user_id == old_treasury {
@@ -448,8 +451,12 @@ pub mod module {
 				AccountWithUnlockedFund::<T>::insert(block_number, accounts);
 			});
 
-			Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(old_treasury));
-			TreasuryAccount::<T>::set(Some(new_treasury));
+			Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(&old_treasury));
+			TreasuryAccount::<T>::set(Some(new_treasury.clone()));
+			Self::deposit_event(Event::<T>::TreasuryAccountRotated {
+				old: old_treasury,
+				new: new_treasury,
+			});
 			Ok(())
 		}
 	}

@@ -184,6 +184,37 @@ fn can_reap_accounts() {
 }
 
 #[test]
+fn cannot_reap_accounts_without_seting_treasury_account() {
+	default_test_ext().execute_with(|| {
+		// Set up data to reap BOB
+		let charlie: AccountId = 3u32;
+		assert_ok!(Roles::register_role(&ALICE, Role::Customer));
+		assert_ok!(Roles::register_role(&BOB, Role::Customer));
+		assert_ok!(Roles::register_role(&charlie, Role::Manager));
+		assert_ok!(Bank::deposit(RuntimeOrigin::signed(charlie), BOB, 100));
+		assert_eq!(Accounts::<Runtime>::get(BOB).free, 100);
+		assert_ok!(Bank::transfer(RuntimeOrigin::signed(BOB), ALICE, 98));
+		assert_eq!(Accounts::<Runtime>::get(BOB).free, 2);
+		// Can not reap accounts when Treasury is not set.
+		Bank::on_finalize(1);
+		assert_eq!(Accounts::<Runtime>::get(BOB).free, 2);
+		// After seting TreasuryAccount, reap_account is working.
+		TreasuryAccount::<Runtime>::set(Some(TREASURY));
+		System::reset_events();
+		Bank::on_finalize(1);
+		System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Reaped {
+			user: BOB,
+			dust: 2,
+		}));
+		assert_eq!(Accounts::<Runtime>::get(BOB), Default::default());
+		let treasury = Bank::treasury().expect("Treasury account must be set.");
+
+		assert_eq!(Accounts::<Runtime>::get(treasury).free, 1_000_002);
+		assert!(Bank::check_total_issuance());
+	});
+}
+
+#[test]
 fn can_stake_funds() {
 	MockGenesisConfig::with_balances(vec![(ALICE, 1_000)]).build().execute_with(|| {
 		System::reset_events();
@@ -430,6 +461,7 @@ fn can_rotate_treasury() {
 	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
 		// Setup old treasury account and data
 		let new_treasury = 10u32;
+		let old_treasury_total = Accounts::<Runtime>::get(TREASURY).total();
 		TreasuryAccount::<Runtime>::set(Some(TREASURY));
 		let account_data = AccountData {
 			free: 1_000_000_000,
@@ -444,11 +476,22 @@ fn can_rotate_treasury() {
 
 		// Rotate treasury account
 		assert_ok!(Bank::rotate_treasury(RawOrigin::Root.into(), new_treasury));
+		System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::TreasuryAccountRotated {
+			old: TREASURY,
+			new: new_treasury,
+		}));
 
 		// Verify all data are migrated
 		assert_eq!(Bank::treasury(), Ok(new_treasury));
 		assert_eq!(TreasuryAccount::<Runtime>::get(), Some(new_treasury));
 		assert_eq!(Accounts::<Runtime>::get(new_treasury), account_data);
+		// Verify old data is not exist
+		assert_eq!(Accounts::<Runtime>::get(TREASURY), AccountData::default());
+
+		TotalIssuance::<Runtime>::mutate(|total| {
+			*total = total.saturating_sub(old_treasury_total).saturating_add(account_data.total());
+		});
+		assert!(Bank::check_total_issuance());
 	});
 }
 
@@ -481,7 +524,7 @@ fn incorrect_role_cannot_rotate_treasury() {
 }
 
 #[test]
-fn test_error_can_display_in_treasury() {
+fn test_error_cases_in_rotating_treasury() {
 	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
 		let new_treasury = 10u32;
 		let collision_account: u32 = ALICE;
