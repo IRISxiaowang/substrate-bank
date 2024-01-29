@@ -3,12 +3,11 @@
 //! This crate contains basic primitive types used within the blockchain codebase.
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic,
 	traits::{IdentifyAccount, Verify},
-	MultiSignature,
+	MultiSignature, RuntimeDebug,
 };
 use sp_std::prelude::*;
 

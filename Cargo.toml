@@ -1,3 +1,9 @@
+[workspace.package]
+authors = ["iris.xiaowang@gmail.com"]
+edition = "2021"
+repository = "git@github.com:IRISxiaowang/substrate-bank.git"
+license = "GPL-3.0-only"
+
 [workspace]
 members = [
     "node",
