@@ -117,7 +117,7 @@ fn can_transfer() {
 }
 
 #[test]
-fn cannot_dealwith_smaller_than_min() {
+fn cannot_deal_with_smaller_than_min() {
 	default_test_ext().execute_with(|| {
 		let charlie: AccountId = 3u32;
 		assert_eq!(Bank::accounts(ALICE), AccountData::default());
@@ -184,7 +184,7 @@ fn can_reap_accounts() {
 }
 
 #[test]
-fn cannot_reap_accounts_without_seting_treasury_account() {
+fn cannot_reap_accounts_without_setting_treasury_account() {
 	default_test_ext().execute_with(|| {
 		// Set up data to reap BOB
 		let charlie: AccountId = 3u32;
@@ -198,7 +198,7 @@ fn cannot_reap_accounts_without_seting_treasury_account() {
 		// Can not reap accounts when Treasury is not set.
 		Bank::on_finalize(1);
 		assert_eq!(Accounts::<Runtime>::get(BOB).free, 2);
-		// After seting TreasuryAccount, reap_account is working.
+		// After setting TreasuryAccount, reap_account is working.
 		TreasuryAccount::<Runtime>::set(Some(TREASURY));
 		System::reset_events();
 		Bank::on_finalize(1);
@@ -477,7 +477,7 @@ fn can_rotate_treasury() {
 		// Rotate treasury account
 		assert_ok!(Bank::rotate_treasury(RawOrigin::Root.into(), new_treasury));
 		System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::TreasuryAccountRotated {
-			old: TREASURY,
+			old: Some(TREASURY),
 			new: new_treasury,
 		}));
 
@@ -491,6 +491,29 @@ fn can_rotate_treasury() {
 		TotalIssuance::<Runtime>::mutate(|total| {
 			*total = total.saturating_sub(old_treasury_total).saturating_add(account_data.total());
 		});
+		assert!(Bank::check_total_issuance());
+	});
+}
+
+#[test]
+fn can_rotate_treasury_without_setting_treasury() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
+		let new_treasury = 10u32;
+		// Verify treasury account is not set.
+		assert_err!(Bank::treasury(), Error::<Runtime>::TreasuryAccountNotSet);
+
+		// Rotate treasury account
+		assert_ok!(Bank::rotate_treasury(RawOrigin::Root.into(), new_treasury));
+		System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::TreasuryAccountRotated {
+			old: None,
+			new: new_treasury,
+		}));
+
+		// Verify all data are migrated
+		assert_eq!(Bank::treasury(), Ok(new_treasury));
+		assert_eq!(TreasuryAccount::<Runtime>::get(), Some(new_treasury));
+		assert_eq!(Accounts::<Runtime>::get(new_treasury), AccountData::default());
+
 		assert!(Bank::check_total_issuance());
 	});
 }

@@ -45,9 +45,7 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-use primitives::{
-	AccountId, Balance, BlockNumber, Hash, Nonce, Signature, SLOT_DURATION, TREASURY, YEAR,
-};
+use primitives::{AccountId, Balance, BlockNumber, Hash, Nonce, Signature, SLOT_DURATION, YEAR};
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -219,14 +217,12 @@ impl pallet_sudo::Config for Runtime {
 
 pub const ED: u128 = 3u128;
 pub const MIN: u128 = 5u128;
-pub const INITIAL_BALANCE: u128 = 1_000_000u128;
 pub const REDEEM_PERIOD: u32 = 200;
 pub const STAKE_PERIOD: u32 = 150;
 pub const INTEREST_PAYOUT_PERIOD: u32 = 100;
 
 parameter_types! {
 	pub const ExistentialDeposit: Balance = ED;
-	pub TreasuryAccount: AccountId = TREASURY.into();
 	pub const MinimumAmount: Balance = MIN;
 	pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
 	pub const StakePeriod: BlockNumber = STAKE_PERIOD;

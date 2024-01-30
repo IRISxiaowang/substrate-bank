@@ -167,7 +167,7 @@ pub mod module {
 		InterestPayed { interest_rate: Perbill, total_interest_payed: T::Balance },
 
 		/// TreasuryAccount rotated.
-		TreasuryAccountRotated { old: T::AccountId, new: T::AccountId },
+		TreasuryAccountRotated { old: Option<T::AccountId>, new: T::AccountId },
 	}
 
 	/// The balance of a token type under an account.
@@ -434,24 +434,35 @@ pub mod module {
 			Ok(())
 		}
 
+		/// Migrate the old treasury account to a new one.
+		///
+		/// Requires Root.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::rotate_treasury())]
 		pub fn rotate_treasury(origin: OriginFor<T>, new_treasury: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 			ensure!(!Accounts::<T>::contains_key(&new_treasury), Error::<T>::AccountIdAlreadyTaken);
-			let old_treasury = Self::treasury()?;
-			// Update lock expiry of old treasury to the new treasury account.
-			AccountWithUnlockedFund::<T>::iter().for_each(|(block_number, mut accounts)| {
-				accounts.iter_mut().for_each(|(user_id, _)| {
-					if *user_id == old_treasury {
-						*user_id = new_treasury.clone();
-					}
-				});
-				// Update the storage map with the modified accounts
-				AccountWithUnlockedFund::<T>::insert(block_number, accounts);
-			});
+			ensure!(
+				T::RoleManager::role(&new_treasury).is_none(),
+				Error::<T>::AccountIdAlreadyTaken
+			);
 
-			Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(&old_treasury));
+			let old_treasury = Self::treasury().ok();
+			if let Some(treasury) = old_treasury.clone() {
+				// Update lock expiry of old treasury to the new treasury account.
+				AccountWithUnlockedFund::<T>::iter().for_each(|(block_number, mut accounts)| {
+					accounts.iter_mut().for_each(|(user_id, _)| {
+						if *user_id == treasury {
+							*user_id = new_treasury.clone();
+						}
+					});
+					// Update the storage map with the modified accounts
+					AccountWithUnlockedFund::<T>::insert(block_number, accounts);
+				});
+
+				Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(&treasury));
+			}
+
 			TreasuryAccount::<T>::set(Some(new_treasury.clone()));
 			Self::deposit_event(Event::<T>::TreasuryAccountRotated {
 				old: old_treasury,
