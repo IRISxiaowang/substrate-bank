@@ -447,26 +447,21 @@ pub mod module {
 				Error::<T>::AccountIdAlreadyTaken
 			);
 
-			let old_treasury = match Self::treasury() {
-				Ok(treasury) => {
-					// Update lock expiry of old treasury to the new treasury account.
-					AccountWithUnlockedFund::<T>::iter().for_each(
-						|(block_number, mut accounts)| {
-							accounts.iter_mut().for_each(|(user_id, _)| {
-								if *user_id == treasury {
-									*user_id = new_treasury.clone();
-								}
-							});
-							// Update the storage map with the modified accounts
-							AccountWithUnlockedFund::<T>::insert(block_number, accounts);
-						},
-					);
+			let old_treasury = Self::treasury().ok();
+			if let Some(treasury) = old_treasury.clone() {
+				// Update lock expiry of old treasury to the new treasury account.
+				AccountWithUnlockedFund::<T>::iter().for_each(|(block_number, mut accounts)| {
+					accounts.iter_mut().for_each(|(user_id, _)| {
+						if *user_id == treasury {
+							*user_id = new_treasury.clone();
+						}
+					});
+					// Update the storage map with the modified accounts
+					AccountWithUnlockedFund::<T>::insert(block_number, accounts);
+				});
 
-					Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(&treasury));
-					Some(treasury)
-				},
-				Err(_) => None, // Set old_treasury to None if treasury() returns an error
-			};
+				Accounts::<T>::insert(&new_treasury, Accounts::<T>::take(&treasury));
+			}
 
 			TreasuryAccount::<T>::set(Some(new_treasury.clone()));
 			Self::deposit_event(Event::<T>::TreasuryAccountRotated {
