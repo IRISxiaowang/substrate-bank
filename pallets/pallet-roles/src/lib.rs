@@ -36,7 +36,7 @@ pub mod module {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The account role cannot be changed, you must unregister first.
-		AccountAleadyRegistered,
+		AccountAlreadyRegistered,
 		/// The account hasn't registered a role.
 		AccountRoleNotRegistered,
 		/// The account role does not equal to the expected role.
@@ -113,7 +113,7 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
 	/// Register a role for a user, insert the user's role into storage and emit a role_registered
 	/// event.
 	fn register_role(id: &T::AccountId, role: Role) -> DispatchResult {
-		ensure!(AccountRoles::<T>::get(id).is_none(), Error::<T>::AccountAleadyRegistered);
+		ensure!(AccountRoles::<T>::get(id).is_none(), Error::<T>::AccountAlreadyRegistered);
 		AccountRoles::<T>::insert(id, role);
 		Self::deposit_event(Event::<T>::RoleRegistered { user: id.clone(), role });
 		Ok(())

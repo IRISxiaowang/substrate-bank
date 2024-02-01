@@ -40,7 +40,7 @@ fn cannot_reregister_role() {
 		// Try to register again
 		assert_noop!(
 			AccountRole::register(RuntimeOrigin::signed(ALICE), Role::Auditor),
-			Error::<Runtime>::AccountAleadyRegistered
+			Error::<Runtime>::AccountAlreadyRegistered
 		);
 		assert_eq!(AccountRole::role(&ALICE), Some(role));
 		assert!(System::events().is_empty());

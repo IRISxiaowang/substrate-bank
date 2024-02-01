@@ -2,7 +2,7 @@
 //!
 //! This crate contains traits shared across the codebase.
 
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchError, DispatchResult};
 
 use primitives::Role;
 
@@ -23,10 +23,16 @@ pub trait BasicAccounting<AccountId, Balance> {
 	fn deposit(user: &AccountId, amount: Balance) -> DispatchResult;
 	fn withdraw(user: &AccountId, amount: Balance) -> DispatchResult;
 	fn transfer(from: &AccountId, to: &AccountId, amount: Balance) -> DispatchResult;
+	fn free_balance(user: &AccountId) -> Balance;
 }
 
 /// A trait for stake and redeem funds.
 pub trait Stakable<AccountId, Balance> {
 	fn stake_funds(user: &AccountId, amount: Balance) -> DispatchResult;
 	fn redeem_funds(user: &AccountId, amount: Balance) -> DispatchResult;
+}
+
+/// A trait for getting the treasury account.
+pub trait GetTreasury<AccountId> {
+	fn treasury() -> Result<AccountId, DispatchError>;
 }
