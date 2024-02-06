@@ -14,7 +14,7 @@ use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{BlakeTwo256, Block as BlockT, NumberFor, One},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, Percent,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -45,7 +45,9 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-use primitives::{AccountId, Balance, BlockNumber, Hash, Nonce, Signature, SLOT_DURATION, YEAR};
+use primitives::{
+	AccountId, Balance, BlockNumber, Hash, Nonce, Signature, DAY, DOLLAR, SLOT_DURATION, YEAR,
+};
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -172,9 +174,6 @@ impl pallet_timestamp::Config for Runtime {
 	type WeightInfo = ();
 }
 
-/// Existential deposit.
-pub const EXISTENTIAL_DEPOSIT: u128 = 500;
-
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ();
@@ -184,7 +183,7 @@ impl pallet_balances::Config for Runtime {
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
-	type ExistentialDeposit = ConstU128<EXISTENTIAL_DEPOSIT>;
+	type ExistentialDeposit = ConstU128<DOLLAR>;
 	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type FreezeIdentifier = ();
@@ -213,21 +212,10 @@ impl pallet_sudo::Config for Runtime {
 	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
-/// Configure the pallet-template in pallets/template.
-
-pub const ED: u128 = 3u128;
-pub const MIN: u128 = 5u128;
-pub const REDEEM_PERIOD: u32 = 200;
-pub const STAKE_PERIOD: u32 = 150;
-pub const INTEREST_PAYOUT_PERIOD: u32 = 100;
+impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
 parameter_types! {
-	pub const ExistentialDeposit: Balance = ED;
-	pub const MinimumAmount: Balance = MIN;
-	pub const RedeemPeriod: BlockNumber = REDEEM_PERIOD;
-	pub const StakePeriod: BlockNumber = STAKE_PERIOD;
-	pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
-	pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
+	pub MinimumAmount: Balance = 2 * DOLLAR;
 }
 
 impl pallet_bank::Config for Runtime {
@@ -236,18 +224,37 @@ impl pallet_bank::Config for Runtime {
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU128<DOLLAR>;
 	type MinimumAmount = MinimumAmount;
-	type RedeemPeriod = RedeemPeriod;
-	type StakePeriod = StakePeriod;
-	type InterestPayoutPeriod = InterestPayoutPeriod;
-	type TotalBlocksPerYear = TotalBlocksPerYear;
+	type RedeemPeriod = ConstU32<200>;
+	type StakePeriod = ConstU32<150>;
+	type InterestPayoutPeriod = ConstU32<100>;
+	type TotalBlocksPerYear = ConstU32<YEAR>;
 }
 
 /// Configure the pallet-template in pallets/template.
 impl pallet_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_roles::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	pub const LotteryPayoutPeriod: BlockNumber = DAY as BlockNumber;
+	pub PrizePoolAccount: AccountId = AccountId::from([0xFF; 32]);
+	pub TaxRate: Percent = Percent::from_percent(5);
+}
+
+impl pallet_lottery::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_lottery::weights::SubstrateWeight<Runtime>;
+	type Balance = Balance;
+	type RoleManager = Roles;
+	type BlockNumberProvider = System;
+	type Bank = Bank;
+	type Randomness = Random;
+	type LotteryPayoutPeriod = LotteryPayoutPeriod;
+	type PrizePoolAccount = PrizePoolAccount;
+	type TaxRate = TaxRate;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -260,9 +267,11 @@ construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
+		Random: pallet_insecure_randomness_collective_flip,
 		// Include the custom logic from the pallet-template in the runtime.
 		Bank: pallet_bank,
 		Roles: pallet_roles,
+		Lottery: pallet_lottery,
 	}
 );
 

@@ -16,8 +16,8 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*, vec::Vec};
 use primitives::Role;
 use traits::{BasicAccounting, GetTreasury, ManageRoles};
 
-// mod mock;
-// mod tests;
+mod mock;
+mod tests;
 
 pub mod weights;
 pub use weights::*;
@@ -57,7 +57,7 @@ pub mod module {
 
 		type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
 
-		type Randomness: Randomness<u32, BlockNumberFor<Self>>;
+		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		#[pallet::constant]
 		type LotteryPayoutPeriod: Get<BlockNumberFor<Self>>;
@@ -102,8 +102,7 @@ pub mod module {
 
 	#[pallet::storage]
 	#[pallet::getter(fn tickets)]
-	pub type PlayersAndLotteries<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, u32, ValueQuery>;
+	pub type PlayersAndLotteries<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, u32>;
 
 	#[pallet::storage]
 	pub(crate) type RandomSeed<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -224,10 +223,21 @@ pub mod module {
 
 			// Transfer total_price from the customer to the PrizePoolAccount.
 			T::Bank::transfer(&id, &T::PrizePoolAccount::get(), total_price)?;
-			PlayersAndLotteries::<T>::mutate(id.clone(), |tickets| {
-				tickets.saturating_add(number_of_tickets)
+
+			// Check if the player exists
+			if let Some(mut tickets) = PlayersAndLotteries::<T>::get(id.clone()) {
+				// Player exists, update the number of tickets
+				tickets = tickets.saturating_add(number_of_tickets);
+				// Update the value in the storage map
+				PlayersAndLotteries::<T>::insert(id.clone(), tickets);
+			} else {
+				// Player doesn't exist, insert a new entry with the given number of tickets
+				PlayersAndLotteries::<T>::insert(id.clone(), number_of_tickets);
+			}
+			Self::deposit_event(Event::<T>::TicketsBought {
+				id: id.clone(),
+				number: number_of_tickets,
 			});
-			Self::deposit_event(Event::<T>::TicketsBought { id, number: number_of_tickets });
 
 			Ok(())
 		}
@@ -269,7 +279,9 @@ pub mod module {
 			let random_seed = Self::increment_random_seed();
 			let total: u32 = players.iter().map(|(_acc, n)| *n).sum();
 			let (random, _) = T::Randomness::random(&random_seed);
-			let target = random % total;
+			let target = <u32>::decode(&mut random.as_ref())
+				.expect("hash should always be > 32 bits") %
+				total;
 			let mut sum = 0;
 
 			for (player, n) in players {
