@@ -132,36 +132,7 @@ pub mod module {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// check if we should payout this block
 			if (block_number % T::LotteryPayoutPeriod::get()).is_zero() {
-				if let Ok(treasury) = T::Bank::treasury() {
-					// Set up data for choosing winners
-					let total = T::Bank::free_balance(&T::PrizePoolAccount::get());
-					let tax_rate = T::TaxRate::get();
-					let number_of_winners = PrizeSplit::<T>::get().len();
-					let players = PlayersAndLotteries::<T>::iter().collect::<Vec<_>>();
-
-					// Choose the winners
-					let winners = Self::select_n_winners(players, number_of_winners as u32);
-
-					for (i, user) in winners.into_iter().enumerate() {
-						let percent = PrizeSplit::<T>::get()[i];
-						let won_fund = percent * total;
-						let tax = tax_rate * won_fund;
-						let _ = T::Bank::transfer(
-							&T::PrizePoolAccount::get(),
-							&user,
-							won_fund.saturating_sub(tax),
-						);
-						let _ = T::Bank::transfer(&T::PrizePoolAccount::get(), &treasury, tax);
-
-						Self::deposit_event(Event::<T>::LotteryWon {
-							user,
-							won_fund: won_fund.saturating_sub(tax),
-							tax,
-						});
-					}
-
-					let _ = PlayersAndLotteries::<T>::clear(u32::MAX, None);
-				}
+				Self::resolve_lottery_winner()
 			}
 		}
 	}
@@ -250,10 +221,44 @@ pub mod module {
 		}
 
 		/// Increase the random seed.
-		fn increment_random_seed() -> Vec<u8> {
+		fn next_seed() -> Vec<u8> {
 			let seed = RandomSeed::<T>::get();
 			RandomSeed::<T>::put(seed.wrapping_add(1));
 			seed.encode()
+		}
+
+		/// Payout the won fund to the winner and paid tax to the treasury account.
+		fn resolve_lottery_winner() {
+			if let Ok(treasury) = T::Bank::treasury() {
+				// Set up data for choosing winners
+				let total = T::Bank::free_balance(&T::PrizePoolAccount::get());
+				let tax_rate = T::TaxRate::get();
+				let number_of_winners = PrizeSplit::<T>::get().len();
+				let players = PlayersAndLotteries::<T>::iter().collect::<Vec<_>>();
+
+				// Choose the winners
+				let winners = Self::select_n_winners(players, number_of_winners as u32);
+
+				for (i, user) in winners.into_iter().enumerate() {
+					let percent = PrizeSplit::<T>::get()[i];
+					let won_fund = percent * total;
+					let tax = tax_rate * won_fund;
+					let _ = T::Bank::transfer(
+						&T::PrizePoolAccount::get(),
+						&user,
+						won_fund.saturating_sub(tax),
+					);
+					let _ = T::Bank::transfer(&T::PrizePoolAccount::get(), &treasury, tax);
+
+					Self::deposit_event(Event::<T>::LotteryWon {
+						user,
+						won_fund: won_fund.saturating_sub(tax),
+						tax,
+					});
+				}
+
+				let _ = PlayersAndLotteries::<T>::clear(u32::MAX, None);
+			}
 		}
 
 		fn select_n_winners(
@@ -262,12 +267,20 @@ pub mod module {
 		) -> Vec<T::AccountId> {
 			let mut winners = vec![];
 
+			// Choose n rounds of winners.
 			for _ in 0..num_winners {
+				// If numbers of chosen is larger than the number of players, then return.
 				if players.is_empty() {
 					break;
 				}
+
+				// Random select a winner in the players.
 				let winner = Self::select_winner(players.clone());
+
+				// Added the winner to the winner vec.
 				winners.push(winner.clone());
+
+				// Removed the chosen winner from the players vec.
 				players.retain(|(player, _)| *player != winner);
 			}
 
@@ -276,7 +289,7 @@ pub mod module {
 		}
 
 		fn select_winner(players: Vec<(T::AccountId, u32)>) -> T::AccountId {
-			let random_seed = Self::increment_random_seed();
+			let random_seed = Self::next_seed();
 			let total: u32 = players.iter().map(|(_acc, n)| *n).sum();
 			let (random, _) = T::Randomness::random(&random_seed);
 			let target = <u32>::decode(&mut random.as_ref())
@@ -284,6 +297,7 @@ pub mod module {
 				total;
 			let mut sum = 0;
 
+			// Find the winner who was holding the target number ticket.
 			for (player, n) in players {
 				sum += n;
 				if sum >= target {
