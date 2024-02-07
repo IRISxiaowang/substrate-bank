@@ -324,6 +324,7 @@ mod benches {
 		[pallet_sudo, Sudo]
 		[pallet_bank, Bank]
 		[pallet_roles, Roles]
+		[pallet_lottery, Lottery]
 	);
 }
 

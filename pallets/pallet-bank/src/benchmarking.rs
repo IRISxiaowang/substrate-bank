@@ -5,7 +5,7 @@ use super::*;
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
-
+use primitives::DOLLAR;
 #[benchmarks]
 mod benchmarks {
 
@@ -29,19 +29,19 @@ mod benchmarks {
 		Accounts::<T>::insert(
 			&customer_1,
 			AccountData {
-				free: 1_000_000u128.into(),
-				reserved: 1_000_000u128.into(),
+				free: (DOLLAR * 1_000_000).into(),
+				reserved: (DOLLAR * 1_000_000).into(),
 				locked: vec![],
 			},
 		);
 		Accounts::<T>::insert(
 			&customer_2,
 			AccountData {
-				free: 1_000_000u128.into(),
-				reserved: 1_000_000u128.into(),
+				free: (DOLLAR * 1_000_000).into(),
+				reserved: (DOLLAR * 1_000_000).into(),
 				locked: vec![LockedFund {
 					id: 1u64,
-					amount: 1_000u128.into(),
+					amount: (DOLLAR * 5).into(),
 					reason: LockReason::Auditor,
 				}],
 			},
@@ -54,7 +54,7 @@ mod benchmarks {
 	fn deposit() {
 		let accounts = setup::<T>();
 		let initial_balance = Accounts::<T>::get(&accounts.customer_1).free;
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 
 		#[extrinsic_call]
 		deposit(RawOrigin::Signed(accounts.manager), accounts.customer_1.clone(), amount);
@@ -66,7 +66,7 @@ mod benchmarks {
 	#[benchmark]
 	fn withdraw() {
 		let accounts = setup::<T>();
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 		let initial_balance = Accounts::<T>::get(&accounts.customer_1).free;
 		#[extrinsic_call]
 		withdraw(RawOrigin::Signed(accounts.manager), accounts.customer_1.clone(), amount);
@@ -78,7 +78,7 @@ mod benchmarks {
 	#[benchmark]
 	fn transfer() {
 		let accounts = setup::<T>();
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 		let initial_balance_1 = Accounts::<T>::get(&accounts.customer_1).free;
 		let initial_balance_2 = Accounts::<T>::get(&accounts.customer_2).free;
 		#[extrinsic_call]
@@ -96,7 +96,7 @@ mod benchmarks {
 	#[benchmark]
 	fn stake_funds() {
 		let accounts = setup::<T>();
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 		let initial_balance = Accounts::<T>::get(&accounts.customer_1).free;
 
 		#[extrinsic_call]
@@ -110,7 +110,7 @@ mod benchmarks {
 	#[benchmark]
 	fn redeem_funds() {
 		let accounts = setup::<T>();
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 		let reserved_balance = Accounts::<T>::get(&accounts.customer_1).reserved;
 
 		#[extrinsic_call]
@@ -124,7 +124,7 @@ mod benchmarks {
 	#[benchmark]
 	fn lock_funds_auditor() {
 		let accounts = setup::<T>();
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 		let free_balance = Accounts::<T>::get(&accounts.customer_1).free;
 		let reserved_balance = Accounts::<T>::get(&accounts.customer_1).reserved;
 
@@ -150,7 +150,7 @@ mod benchmarks {
 	#[benchmark]
 	fn unlock_funds_auditor() {
 		let accounts = setup::<T>();
-		let amount = 1_000u128.into();
+		let amount = (DOLLAR * 5).into();
 		let free_balance = Accounts::<T>::get(&accounts.customer_2).free;
 
 		#[extrinsic_call]

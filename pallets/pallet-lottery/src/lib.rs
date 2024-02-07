@@ -22,8 +22,8 @@ mod tests;
 pub mod weights;
 pub use weights::*;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 pub use module::*;
 
@@ -284,7 +284,6 @@ pub mod module {
 				players.retain(|(player, _)| *player != winner);
 			}
 
-			println!("Winners are: {:?}", winners);
 			winners
 		}
 

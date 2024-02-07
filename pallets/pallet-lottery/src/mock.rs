@@ -6,7 +6,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, Everything, Randomness},
 };
 
-use primitives::YEAR;
+use primitives::{DOLLAR, YEAR};
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
 use crate as pallet_lottery;
@@ -169,13 +169,13 @@ impl MockGenesisConfig {
 			System::set_block_number(1);
 
 			assert_ok!(Bank::rotate_treasury(RuntimeOrigin::root(), TREASURY));
-			assert_ok!(Lottery::update_ticket_price(RuntimeOrigin::signed(EVE), 1_000));
+			assert_ok!(Lottery::update_ticket_price(RuntimeOrigin::signed(EVE), DOLLAR));
 
 			self.lotteries.into_iter().for_each(|(user, tickets)| {
 				assert_ok!(Bank::deposit(
 					RuntimeOrigin::signed(EVE),
 					PRIZE_POOL_ACCOUNT,
-					(tickets * 1_000).into()
+					DOLLAR * tickets as u128
 				));
 				PlayersAndLotteries::<Runtime>::set(user, Some(tickets));
 			});
