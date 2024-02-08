@@ -310,9 +310,9 @@ pub mod module {
 					return player
 				}
 			}
-			// It should never get here, if returned the pool account that means something is wrong.
-			unreachable!();
-			// T::PrizePoolAccount::get()
+			// `target` must be < total number of tickets. Therefore a winner is guaranteed
+			// to be found. This code is unreachable.
+			T::PrizePoolAccount::get()
 		}
 	}
 }
