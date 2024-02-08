@@ -77,6 +77,8 @@ pub mod module {
 		IncorrectRole,
 		/// The ticket price is not set.
 		TicketPriceNotSet,
+		/// Tax rate must be between 0% - 100%.
+		InvalidTaxRate,
 	}
 
 	#[pallet::event]
@@ -85,9 +87,9 @@ pub mod module {
 		/// Set the prize split.
 		PrizeSplitUpdated { split: Vec<Percent> },
 		/// Set the ticket price.
-		TicketPriceUpdated { old: T::Balance, new: T::Balance },
+		TicketPriceUpdated { new: T::Balance },
 		/// Customer bought numbers of tickets.
-		TicketsBought { id: T::AccountId, number: u32 },
+		TicketsBought { id: T::AccountId, number: u32, total_price: T::Balance },
 		/// Customer won the lottery fund and paid tax.
 		LotteryWon { user: T::AccountId, won_fund: T::Balance, tax: T::Balance },
 	}
@@ -102,7 +104,8 @@ pub mod module {
 
 	#[pallet::storage]
 	#[pallet::getter(fn tickets)]
-	pub type PlayersAndLotteries<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, u32>;
+	pub type TicketsBought<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, u32, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type RandomSeed<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -127,12 +130,10 @@ pub mod module {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn integrity_test() {}
-
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// check if we should payout this block
 			if (block_number % T::LotteryPayoutPeriod::get()).is_zero() {
-				Self::resolve_lottery_winner()
+				let _ = Self::resolve_lottery_winner();
 			}
 		}
 	}
@@ -169,10 +170,10 @@ pub mod module {
 				role == Some(Role::Manager) || role == Some(Role::Auditor),
 				Error::<T>::IncorrectRole
 			);
-			let old = TicketPrice::<T>::get();
+
 			// Update the ticket price
 			TicketPrice::<T>::put(new_price);
-			Self::deposit_event(Event::<T>::TicketPriceUpdated { old, new: new_price });
+			Self::deposit_event(Event::<T>::TicketPriceUpdated { new: new_price });
 
 			Ok(())
 		}
@@ -195,19 +196,14 @@ pub mod module {
 			// Transfer total_price from the customer to the PrizePoolAccount.
 			T::Bank::transfer(&id, &T::PrizePoolAccount::get(), total_price)?;
 
-			// Check if the player exists
-			if let Some(mut tickets) = PlayersAndLotteries::<T>::get(id.clone()) {
-				// Player exists, update the number of tickets
-				tickets = tickets.saturating_add(number_of_tickets);
-				// Update the value in the storage map
-				PlayersAndLotteries::<T>::insert(id.clone(), tickets);
-			} else {
-				// Player doesn't exist, insert a new entry with the given number of tickets
-				PlayersAndLotteries::<T>::insert(id.clone(), number_of_tickets);
-			}
+			TicketsBought::<T>::mutate(id.clone(), |tickets| {
+				*tickets = tickets.saturating_add(number_of_tickets)
+			});
+
 			Self::deposit_event(Event::<T>::TicketsBought {
 				id: id.clone(),
 				number: number_of_tickets,
+				total_price,
 			});
 
 			Ok(())
@@ -227,38 +223,49 @@ pub mod module {
 			seed.encode()
 		}
 
-		/// Payout the won fund to the winner and paid tax to the treasury account.
-		fn resolve_lottery_winner() {
-			if let Ok(treasury) = T::Bank::treasury() {
-				// Set up data for choosing winners
-				let total = T::Bank::free_balance(&T::PrizePoolAccount::get());
-				let tax_rate = T::TaxRate::get();
-				let number_of_winners = PrizeSplit::<T>::get().len();
-				let players = PlayersAndLotteries::<T>::iter().collect::<Vec<_>>();
+		/// Resolve the winner of a round of lottery. Transfer prize - tax to the winner and tax to
+		/// the Treasury.
+		fn resolve_lottery_winner() -> DispatchResult {
+			// Make sure the treasury account is set.
+			let treasury = T::Bank::treasury()?;
 
-				// Choose the winners
-				let winners = Self::select_n_winners(players, number_of_winners as u32);
+			// Ensure that the tax rate is less than or equal to 100% (1.0)
+			let tax_rate = T::TaxRate::get();
+			ensure!(tax_rate <= Percent::one(), Error::<T>::InvalidTaxRate);
 
-				for (i, user) in winners.into_iter().enumerate() {
-					let percent = PrizeSplit::<T>::get()[i];
-					let won_fund = percent * total;
-					let tax = tax_rate * won_fund;
-					let _ = T::Bank::transfer(
-						&T::PrizePoolAccount::get(),
-						&user,
-						won_fund.saturating_sub(tax),
-					);
-					let _ = T::Bank::transfer(&T::PrizePoolAccount::get(), &treasury, tax);
+			// Set up data for choosing winners
+			// Get the total fund in the lottery pool.
+			// Collect the players with the numbers of ticket bought for selecting winners, then
+			// clear the TicketsBought storage for next round.
+			let total = T::Bank::free_balance(&T::PrizePoolAccount::get());
+			let players = TicketsBought::<T>::drain().collect::<Vec<_>>();
 
-					Self::deposit_event(Event::<T>::LotteryWon {
-						user,
-						won_fund: won_fund.saturating_sub(tax),
-						tax,
-					});
-				}
+			// Choose the winners
+			let winners = Self::select_n_winners(players, PrizeSplit::<T>::get().len() as u32);
 
-				let _ = PlayersAndLotteries::<T>::clear(u32::MAX, None);
+			// Calculate the prize and tax amounts for each prize split percentage
+			let (prize, tax): (Vec<T::Balance>, Vec<T::Balance>) = PrizeSplit::<T>::get()
+				.into_iter()
+				.map(|percent| {
+					let full_prize = percent * total;
+					((Percent::one() - tax_rate) * full_prize, tax_rate * full_prize)
+				})
+				.unzip();
+
+			for (i, user) in winners.into_iter().enumerate() {
+				// Payout the prize to each winner and put the tax into treasury account.
+				let _ = T::Bank::transfer(&T::PrizePoolAccount::get(), &user, prize[i]);
+				let _ = T::Bank::transfer(&T::PrizePoolAccount::get(), &treasury, tax[i]);
+
+				// Added an event for each winner.
+				Self::deposit_event(Event::<T>::LotteryWon {
+					user,
+					won_fund: prize[i],
+					tax: tax[i],
+				});
 			}
+
+			Ok(())
 		}
 
 		fn select_n_winners(
@@ -287,7 +294,7 @@ pub mod module {
 			winners
 		}
 
-		fn select_winner(players: Vec<(T::AccountId, u32)>) -> T::AccountId {
+		pub(crate) fn select_winner(players: Vec<(T::AccountId, u32)>) -> T::AccountId {
 			let random_seed = Self::next_seed();
 			let total: u32 = players.iter().map(|(_acc, n)| *n).sum();
 			let (random, _) = T::Randomness::random(&random_seed);
@@ -299,11 +306,13 @@ pub mod module {
 			// Find the winner who was holding the target number ticket.
 			for (player, n) in players {
 				sum += n;
-				if sum >= target {
+				if sum > target {
 					return player
 				}
 			}
-			T::PrizePoolAccount::get()
+			// It should never get here, if returned the pool account that means something is wrong.
+			unreachable!();
+			// T::PrizePoolAccount::get()
 		}
 	}
 }

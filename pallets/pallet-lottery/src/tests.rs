@@ -7,6 +7,8 @@ use frame_support::{assert_noop, assert_ok, traits::Randomness};
 use primitives::DOLLAR;
 use sp_runtime::Percent;
 
+const INITIAL_BALANCE: u128 = 1_000 * DOLLAR;
+
 #[test]
 fn can_control_random_output() {
 	default_test_ext().execute_with(|| {
@@ -59,13 +61,12 @@ fn auditor_and_manager_can_update_ticket_price() {
 		// Manager Eve
 		assert_ok!(Lottery::update_ticket_price(RuntimeOrigin::signed(EVE), 1));
 		System::assert_last_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketPriceUpdated {
-			old: DOLLAR,
 			new: 1,
 		}));
+
 		// Auditor Ferdie
 		assert_ok!(Lottery::update_ticket_price(RuntimeOrigin::signed(FERDIE), 2));
 		System::assert_last_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketPriceUpdated {
-			old: 1,
 			new: 2,
 		}));
 	});
@@ -85,7 +86,7 @@ fn customer_cannot_update_ticket_price() {
 #[test]
 fn can_buy_tickets() {
 	let mock = MockGenesisConfig { balance: vec![], lotteries: vec![] };
-	mock.with_balances(vec![(ALICE, 1_000 * DOLLAR), (BOB, 1_000 * DOLLAR)])
+	mock.with_balances(vec![(ALICE, INITIAL_BALANCE), (BOB, INITIAL_BALANCE)])
 		.build()
 		.execute_with(|| {
 			// Manager Eve set ticket price
@@ -96,19 +97,21 @@ fn can_buy_tickets() {
 			assert_ok!(Lottery::buy_ticket(RuntimeOrigin::signed(BOB), 20));
 
 			// Verify data
-			assert_eq!(PlayersAndLotteries::<Runtime>::get(ALICE), Some(10));
+			assert_eq!(TicketsBought::<Runtime>::get(ALICE), 10);
 			assert_eq!(Bank::free_balance(&ALICE), 950 * DOLLAR);
-			assert_eq!(PlayersAndLotteries::<Runtime>::get(BOB), Some(20));
+			assert_eq!(TicketsBought::<Runtime>::get(BOB), 20);
 			assert_eq!(Bank::free_balance(&BOB), 900 * DOLLAR);
 			assert_eq!(Bank::free_balance(&PRIZE_POOL_ACCOUNT), 150 * DOLLAR);
 
 			System::assert_has_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketsBought {
 				id: ALICE,
 				number: 10u32,
+				total_price: 50 * DOLLAR,
 			}));
 			System::assert_last_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketsBought {
 				id: BOB,
 				number: 20u32,
+				total_price: 100 * DOLLAR,
 			}));
 		});
 }
@@ -116,7 +119,7 @@ fn can_buy_tickets() {
 #[test]
 fn cannot_buy_tickets_without_setting_ticket_price() {
 	let mock = MockGenesisConfig { balance: vec![], lotteries: vec![] };
-	mock.with_balances(vec![(ALICE, 1_000 * DOLLAR), (BOB, 1_000 * DOLLAR)])
+	mock.with_balances(vec![(ALICE, INITIAL_BALANCE), (BOB, INITIAL_BALANCE)])
 		.build()
 		.execute_with(|| {
 			// Buy tickets without setting ticket price
@@ -132,30 +135,37 @@ fn cannot_buy_tickets_without_setting_ticket_price() {
 fn basic_end_to_end_works() {
 	let mock = MockGenesisConfig { balance: vec![], lotteries: vec![] };
 	mock.with_balances(vec![
-		(ALICE, 1_000 * DOLLAR),
-		(BOB, 1_000 * DOLLAR),
-		(CHARLIE, 1_000 * DOLLAR),
-		(DAVE, 1_000 * DOLLAR),
+		(ALICE, INITIAL_BALANCE),
+		(BOB, INITIAL_BALANCE),
+		(CHARLIE, INITIAL_BALANCE),
+		(DAVE, INITIAL_BALANCE),
 	])
 	.with_lotteries(vec![(ALICE, 10), (BOB, 5), (CHARLIE, 4), (DAVE, 1)])
 	.build()
 	.execute_with(|| {
-		RandomOutput::set(10u32);
+		RandomOutput::set(0u32);
 
 		// Manager Eve initialize ticket price $1, so that the pool has $20.
 		let total: Balance = 20 * DOLLAR;
+
+		// Default the prize-split is one.
+		let won_fund = (Percent::one() - TAX_RATE) * total;
 
 		// Select the winner
 		Lottery::on_finalize(LOTTERY_PAYOUT_PERIOD);
 
 		// Verify data
-		assert_eq!(Bank::free_balance(&ALICE), 1_019 * DOLLAR);
+		assert_eq!(Bank::free_balance(&DAVE), INITIAL_BALANCE + won_fund);
 		assert_eq!(Bank::free_balance(&PRIZE_POOL_ACCOUNT), Default::default());
 		assert_eq!(Bank::free_balance(&TREASURY), DOLLAR);
 
+		assert_eq!(Bank::free_balance(&ALICE), INITIAL_BALANCE);
+		assert_eq!(Bank::free_balance(&BOB), INITIAL_BALANCE);
+		assert_eq!(Bank::free_balance(&CHARLIE), INITIAL_BALANCE);
+
 		System::assert_last_event(RuntimeEvent::Lottery(Event::<Runtime>::LotteryWon {
-			user: ALICE,
-			won_fund: (Percent::one() - TAX_RATE) * total,
+			user: DAVE,
+			won_fund,
 			tax: TAX_RATE * total,
 		}));
 	});
@@ -165,15 +175,15 @@ fn basic_end_to_end_works() {
 fn choose_multiple_winners_works() {
 	let mock = MockGenesisConfig { balance: vec![], lotteries: vec![] };
 	mock.with_balances(vec![
-		(ALICE, 1_000 * DOLLAR),
-		(BOB, 1_000 * DOLLAR),
-		(CHARLIE, 1_000 * DOLLAR),
-		(DAVE, 1_000 * DOLLAR),
+		(ALICE, INITIAL_BALANCE),
+		(BOB, INITIAL_BALANCE),
+		(CHARLIE, INITIAL_BALANCE),
+		(DAVE, INITIAL_BALANCE),
 	])
 	.with_lotteries(vec![(ALICE, 10), (BOB, 50), (CHARLIE, 40), (DAVE, 100)])
 	.build()
 	.execute_with(|| {
-		RandomOutput::set(10u32);
+		RandomOutput::set(0u32);
 
 		// Set prize split
 		let split =
@@ -195,10 +205,10 @@ fn choose_multiple_winners_works() {
 		Lottery::on_finalize(LOTTERY_PAYOUT_PERIOD);
 
 		// Verify data
-		assert_eq!(Bank::free_balance(&ALICE), 1_000 * DOLLAR + alice_won - alice_tax);
-		assert_eq!(Bank::free_balance(&BOB), 1_000 * DOLLAR + bob_won - bob_tax);
-		assert_eq!(Bank::free_balance(&CHARLIE), 1_000 * DOLLAR);
-		assert_eq!(Bank::free_balance(&DAVE), 1_000 * DOLLAR + dave_won - dave_tax);
+		assert_eq!(Bank::free_balance(&ALICE), INITIAL_BALANCE + alice_won - alice_tax);
+		assert_eq!(Bank::free_balance(&BOB), INITIAL_BALANCE + bob_won - bob_tax);
+		assert_eq!(Bank::free_balance(&CHARLIE), INITIAL_BALANCE);
+		assert_eq!(Bank::free_balance(&DAVE), INITIAL_BALANCE + dave_won - dave_tax);
 
 		assert_eq!(Bank::free_balance(&PRIZE_POOL_ACCOUNT), Default::default());
 		assert_eq!(Bank::free_balance(&TREASURY), TAX_RATE * total);
@@ -224,11 +234,11 @@ fn choose_multiple_winners_works() {
 #[test]
 fn not_enough_players_works() {
 	let mock = MockGenesisConfig { balance: vec![], lotteries: vec![] };
-	mock.with_balances(vec![(ALICE, 1_000 * DOLLAR), (BOB, 1_000 * DOLLAR)])
+	mock.with_balances(vec![(ALICE, INITIAL_BALANCE), (BOB, INITIAL_BALANCE)])
 		.with_lotteries(vec![(ALICE, 100), (BOB, 100)])
 		.build()
 		.execute_with(|| {
-			RandomOutput::set(10u32);
+			RandomOutput::set(0u32);
 
 			// Set prize split
 			let split = vec![
@@ -251,8 +261,8 @@ fn not_enough_players_works() {
 			Lottery::on_finalize(LOTTERY_PAYOUT_PERIOD);
 
 			// Verify data
-			assert_eq!(Bank::free_balance(&ALICE), 1_000 * DOLLAR + alice_won - alice_tax);
-			assert_eq!(Bank::free_balance(&BOB), 1_000 * DOLLAR + bob_won - bob_tax);
+			assert_eq!(Bank::free_balance(&ALICE), INITIAL_BALANCE + alice_won - alice_tax);
+			assert_eq!(Bank::free_balance(&BOB), INITIAL_BALANCE + bob_won - bob_tax);
 
 			assert_eq!(Bank::free_balance(&PRIZE_POOL_ACCOUNT), total - alice_won - bob_won);
 			assert_eq!(Bank::free_balance(&TREASURY), alice_tax + bob_tax);
@@ -268,4 +278,23 @@ fn not_enough_players_works() {
 				tax: alice_tax,
 			}));
 		});
+}
+
+#[test]
+fn select_winner_works() {
+	default_test_ext().execute_with(|| {
+		// Set the vec with value from the storage TicketsBought.
+		let tickets_bought = (11..21).map(|p| (p, 10u32)).collect::<Vec<_>>();
+
+		// Select winner thousand times.
+		for i in 0..1000 {
+			RandomOutput::set(i);
+
+			let actual_winner = Lottery::select_winner(tickets_bought.clone());
+			let expected_winner = i % 100 / 10 + 11;
+
+			// Verify
+			assert_eq!(actual_winner, expected_winner);
+		}
+	});
 }

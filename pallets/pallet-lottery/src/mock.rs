@@ -177,7 +177,7 @@ impl MockGenesisConfig {
 					PRIZE_POOL_ACCOUNT,
 					DOLLAR * tickets as u128
 				));
-				PlayersAndLotteries::<Runtime>::set(user, Some(tickets));
+				TicketsBought::<Runtime>::set(user, tickets);
 			});
 		});
 
