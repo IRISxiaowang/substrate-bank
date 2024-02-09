@@ -14,7 +14,7 @@ use sp_runtime::{
 use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
 use primitives::{LockId, Role};
-use traits::{BasicAccounting, ManageRoles, Stakable};
+use traits::{BasicAccounting, GetTreasury, ManageRoles, Stakable};
 
 mod mock;
 mod tests;
@@ -510,6 +510,10 @@ impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 		Self::deposit_event(Event::Transferred { from: from.clone(), to: to.clone(), amount });
 		Ok(())
 	}
+
+	fn free_balance(user: &T::AccountId) -> T::Balance {
+		Accounts::<T>::get(user).free
+	}
 }
 
 impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
@@ -567,6 +571,12 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 			reason: LockReason::Redeem,
 		});
 		Ok(())
+	}
+}
+
+impl<T: Config> GetTreasury<T::AccountId> for Pallet<T> {
+	fn treasury() -> Result<T::AccountId, DispatchError> {
+		TreasuryAccount::<T>::get().ok_or(Error::<T>::TreasuryAccountNotSet.into())
 	}
 }
 
@@ -670,9 +680,5 @@ impl<T: Config> Pallet<T> {
 				Err(Error::<T>::InvalidLockId.into())
 			}
 		})
-	}
-
-	fn treasury() -> Result<T::AccountId, DispatchError> {
-		TreasuryAccount::<T>::get().ok_or(Error::<T>::TreasuryAccountNotSet.into())
 	}
 }

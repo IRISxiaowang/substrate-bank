@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 /// Defines all the constants for the project
-use crate::BlockNumber;
+use crate::{Balance, BlockNumber};
 
 /// This determines the average expected block time that we are targeting.
 /// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
@@ -16,7 +16,11 @@ pub const MILLISECS_PER_BLOCK: u64 = 6000;
 pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 
 // Time is measured by number of blocks.
-pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
-pub const HOURS: BlockNumber = MINUTES * 60;
-pub const DAYS: BlockNumber = HOURS * 24;
-pub const YEAR: BlockNumber = DAYS * 365;
+pub const MINUTE: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
+pub const HOUR: BlockNumber = MINUTE * 60;
+pub const DAY: BlockNumber = HOUR * 24;
+pub const YEAR: BlockNumber = DAY * 365;
+
+pub const DOLLAR: Balance = 1_000_000_000_000u128;
+pub const CENT: Balance = 10_000_000_000u128;
+pub const MILLICENT: Balance = 10_000_000u128;
