@@ -642,7 +642,7 @@ impl<T: Config> Pallet<T> {
 	/// Get the lock id to store into the LockedFund.
 	fn next_lock_id() -> LockId {
 		NextLockId::<T>::mutate(|id| {
-			*id = id.saturating_add(1);
+			*id = id.wrapping_add(1);
 			*id
 		})
 	}

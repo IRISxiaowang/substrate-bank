@@ -35,6 +35,58 @@ pub struct CastedVotes<AccountId> {
 	pub nays: BTreeSet<AccountId>,
 }
 
+impl<AccountId: sp_std::cmp::Ord + std::clone::Clone> CastedVotes<AccountId> {
+	/// Checks if the account with the given ID has already voted on the proposal.
+	pub fn has_voted(&self, id: &AccountId) -> bool {
+		self.yays.contains(id) || self.nays.contains(id)
+	}
+
+	/// Casts a vote on the proposal for the specified account.
+	///
+	/// If the account has already voted, returns false.
+	/// Otherwise, if the vote is cast successfully, returns true.
+	pub fn cast_vote(&mut self, who: AccountId, approve: bool) -> bool {
+		if self.has_voted(&who) {
+			false
+		} else {
+			if approve {
+				self.yays.insert(who.clone());
+			} else {
+				self.nays.insert(who);
+			}
+			true
+		}
+	}
+
+	/// Checks if the proposal can be resolved based on the current votes and threshold.
+	///
+	/// Returns:
+	/// - Some(true) if the proposal passes the threshold.
+	/// - Some(false) if the proposal fails the threshold.
+	/// - None if the proposal cannot be resolved yet.
+	pub fn can_resolve(&self, total_authorities: u32, threshold: Percent) -> Option<bool> {
+		let count_yays = self.yays.len();
+		let count_nays = self.nays.len();
+
+		let pass: Percent = Percent::from_rational(count_yays as u32, total_authorities);
+		let fail: Percent = Percent::from_rational(count_nays as u32, total_authorities);
+
+		if pass > threshold {
+			Some(true)
+		} else if fail >= Percent::one().saturating_sub(threshold) {
+			Some(false)
+		} else {
+			None
+		}
+	}
+}
+
+impl<AccountId> Default for CastedVotes<AccountId> {
+	fn default() -> Self {
+		Self { yays: Default::default(), nays: Default::default() }
+	}
+}
+
 pub use module::*;
 
 #[frame_support::pallet]
@@ -77,13 +129,11 @@ pub mod module {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The member is not inside the council.
-		InvalidAuthority,
+		Unauthorized,
 		/// The proposal id does not exist.
 		InvalidProposalId,
 		/// The user has voted.
 		AlreadyVoted,
-		/// Error wouldn't like to happen.
-		ImpossibleReach,
 	}
 
 	#[pallet::event]
@@ -118,17 +168,17 @@ pub mod module {
 	#[pallet::getter(fn proposals)]
 	pub type Proposals<T: Config> = StorageMap<_, Blake2_128Concat, ProposalId, EncodedCall>;
 
-	/// Stores the proposal IDs that will expire at a black.
+	/// Stores the proposal IDs that are set to expire at a specific block number.
 	#[pallet::storage]
 	#[pallet::getter(fn expiry)]
 	pub type Expiry<T: Config> =
-		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, BTreeSet<ProposalId>>;
+		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, BTreeSet<ProposalId>, ValueQuery>;
 
 	/// Stores the vote results of the proposal id.
 	#[pallet::storage]
 	#[pallet::getter(fn votes)]
 	pub type Votes<T: Config> =
-		StorageMap<_, Blake2_128Concat, ProposalId, CastedVotes<T::AccountId>>;
+		StorageMap<_, Blake2_128Concat, ProposalId, CastedVotes<T::AccountId>, ValueQuery>;
 
 	/// Stores the current council members.
 	#[pallet::storage]
@@ -151,7 +201,7 @@ pub mod module {
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			// Set CurrentAuthorities storage with initial_authorities.
-			Pallet::<T>::rotate_authorities(self.initial_authorities.clone());
+			Pallet::<T>::do_rotate_authorities(self.initial_authorities.clone());
 		}
 	}
 
@@ -171,19 +221,13 @@ pub mod module {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
-			// Check the expiry
-			if let Some(expired_proposals) = Expiry::<T>::get(block_number) {
-				let _ = expired_proposals.iter().map(|proposal_id| {
-					Proposals::<T>::remove(proposal_id);
-					Votes::<T>::remove(proposal_id);
-				});
-			}
-
-			// Make the function call
+			// Take and process each proposal that needs dispatch the governance call.
 			ProposalsToResolve::<T>::take().into_iter().for_each(|(proposal, approved)| {
+				// Decode the proposal call if it exists.
 				if let Some(Ok(call)) = Proposals::<T>::take(proposal)
 					.map(|encoded| <T as Config>::RuntimeCall::decode(&mut &(*encoded)))
 				{
+					// if approved that dispatch the governance call and record the result.
 					if approved {
 						Self::deposit_event(Event::<T>::ProposalPassed {
 							id: proposal,
@@ -200,6 +244,21 @@ pub mod module {
 				// Deleted the related data in Votes.
 				Votes::<T>::remove(proposal);
 			});
+
+			// Take the expiry and clean up the storage if any proposal expired and log an event.
+			Expiry::<T>::take(block_number).into_iter().for_each(|proposal_id| {
+				// The resolved proposals should be cleaned up already, in this case, only log an
+				// event with the expired proposal.
+				if Proposals::<T>::contains_key(proposal_id) {
+					Self::deposit_event(Event::<T>::ProposalRejected {
+						id: proposal_id,
+						reason: RejectReason::Expired,
+					});
+				}
+
+				Proposals::<T>::remove(proposal_id);
+				Votes::<T>::remove(proposal_id);
+			});
 		}
 	}
 
@@ -215,7 +274,7 @@ pub mod module {
 			call: <T as Config>::RuntimeCall,
 		) -> DispatchResult {
 			let id = ensure_signed(origin)?;
-			ensure!(CurrentAuthorities::<T>::get().contains(&id), Error::<T>::InvalidAuthority);
+			ensure!(CurrentAuthorities::<T>::get().contains(&id), Error::<T>::Unauthorized);
 			let proposal_id = Self::next_proposal_id();
 			let expired_block =
 				T::BlockNumberProvider::current_block_number() + T::ExpiryPeriod::get();
@@ -224,19 +283,16 @@ pub mod module {
 			Proposals::<T>::insert(proposal_id, call.encode());
 
 			// add proposal id to expiry.
-			// Get the BTreeSet for the block number or create a new one if it doesn't exist
-			let mut expiry_set = Expiry::<T>::get(expired_block).unwrap_or_default();
+			// Get the BTreeSet for the block number and add the proposal id into the set.
+			Expiry::<T>::mutate(expired_block, |expiry_set| {
+				// Insert the proposal id into the set
+				expiry_set.insert(proposal_id);
+			});
 
-			// Insert the proposal id into the set
-			expiry_set.insert(proposal_id);
-
-			// Store the updated set back into storage
-			Expiry::<T>::insert(expired_block, expiry_set);
-
-			// add vote to Votes
-			let mut set = BTreeSet::new();
-			set.insert(id.clone());
-			Votes::<T>::insert(proposal_id, CastedVotes { yays: set, nays: Default::default() });
+			// add vote to Votes.
+			Votes::<T>::mutate(proposal_id, |casted| {
+				casted.yays.insert(id.clone());
+			});
 
 			// Emit Event: ProposalRegistered
 			Self::deposit_event(Event::<T>::ProposalRegistered { who: id, call });
@@ -244,57 +300,42 @@ pub mod module {
 			Ok(())
 		}
 
-		// Requires Root origin - sets the current authorities
+		/// Allows council members to cast their votes (approval or rejection) on a given proposal.
+		/// It ensures that votes are cast by authorized members.
+		/// Checks the validity of the proposal, handles voting, determines if the proposal is ready
+		/// for resolution.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(origin: OriginFor<T>, proposal: ProposalId, approve: bool) -> DispatchResult {
 			// check if the vote can be casted
 			// is member of the council
 			let id = ensure_signed(origin)?;
-			ensure!(CurrentAuthorities::<T>::get().contains(&id), Error::<T>::InvalidAuthority);
+			ensure!(CurrentAuthorities::<T>::get().contains(&id), Error::<T>::Unauthorized);
 
 			// Proposal is valid
-			ensure!(Proposals::<T>::get(proposal).is_some(), Error::<T>::InvalidProposalId);
+			ensure!(Proposals::<T>::contains_key(proposal), Error::<T>::InvalidProposalId);
 
-			if let Some(mut casted) = Votes::<T>::get(proposal) {
-				// has not voted
-				ensure!(
-					!casted.yays.contains(&id) && !casted.nays.contains(&id),
-					Error::<T>::AlreadyVoted
-				);
-
-				// Cast the vote
-				if approve {
-					casted.yays.insert(id.clone());
-				} else {
-					casted.nays.insert(id.clone());
-				}
+			let _ = Votes::<T>::mutate(proposal, |casted| -> DispatchResult {
+				// has not voted and cast the vote
+				ensure!(casted.cast_vote(id.clone(), approve), Error::<T>::AlreadyVoted);
 
 				// check if the proposal is ready to be resolved.
-				let count_yays = casted.yays.len();
-				let count_nays = casted.nays.len();
-				let count_council = CurrentAuthorities::<T>::get().len();
-				let pass: Percent = Percent::from_rational(count_yays as u32, count_council as u32);
-				let fail: Percent = Percent::from_rational(count_nays as u32, count_council as u32);
-
-				if pass >= T::MajorityThreshold::get() {
-					ProposalsToResolve::<T>::get().insert((proposal, true));
+				if let Some(bool) = casted.can_resolve(
+					CurrentAuthorities::<T>::get().len() as u32,
+					T::MajorityThreshold::get(),
+				) {
+					ProposalsToResolve::<T>::get().insert((proposal, bool));
 				}
 
-				if fail >= Percent::one().saturating_sub(T::MajorityThreshold::get()) {
-					ProposalsToResolve::<T>::get().insert((proposal, false));
-				}
-			} else {
-				// return error, can not reach here.
-			}
-
+				Ok(())
+			});
 			// Emit Event: VoteCasted
 			Self::deposit_event(Event::<T>::VoteCasted { who: id, proposal, approve });
 
 			Ok(())
 		}
 
-		// Requires Root origin - sets the current authorities
+		/// Requires Root origin - sets the current authorities
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::force_rotate_authorities())]
 		pub fn force_rotate_authorities(
@@ -303,11 +344,11 @@ pub mod module {
 		) -> DispatchResult {
 			// ensure root
 			ensure_root(origin)?;
-			Self::rotate_authorities(new_members);
+			Self::do_rotate_authorities(new_members);
 			Ok(())
 		}
 
-		// Requires Governance origin - sets the current authorities
+		/// Requires Governance origin - sets the current authorities
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::council_rotate_authorities())]
 		pub fn council_rotate_authorities(
@@ -317,7 +358,7 @@ pub mod module {
 			// ensure governance
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			Self::rotate_authorities(new_members);
+			Self::do_rotate_authorities(new_members);
 			Ok(())
 		}
 	}
@@ -365,40 +406,34 @@ pub mod module {
 		/// Increased proposal ID.
 		fn next_proposal_id() -> ProposalId {
 			NextProposalId::<T>::mutate(|id| {
-				*id = id.saturating_add(1);
+				*id = id.wrapping_add(1);
 				*id
 			})
 		}
 
-		fn rotate_authorities(authorities: Vec<T::AccountId>) {
+		/// Orchestrates the rotation of authorities by setting new authorities.
+		/// Resetting expiry blocks, clearing votes for current proposals, and emitting an event to
+		/// notify interested parties about the authority rotation and the new council members.
+		fn do_rotate_authorities(authorities: Vec<T::AccountId>) {
 			// Sets the new authority
 			let unique_members: BTreeSet<_> = authorities.into_iter().collect();
 			CurrentAuthorities::<T>::set(unique_members.clone());
 
 			// Reset all expiry blocks
-			if Expiry::<T>::iter().next().is_some() {
-				let expired_block = T::BlockNumberProvider::current_block_number()
-					.saturating_add(T::ExpiryPeriod::get());
-				// Initialize an empty set to store all elements
-				let mut all_elements: BTreeSet<ProposalId> = BTreeSet::new();
+			// Merge the current expiry set with the all_proposals set and clean up the Expiry
+			// storage.
+			let all_proposals =
+				Expiry::<T>::drain().fold(BTreeSet::new(), |mut init, (_, mut expiry_set)| {
+					init.append(&mut expiry_set);
+					init
+				});
+			let expired_block = T::BlockNumberProvider::current_block_number()
+				.saturating_add(T::ExpiryPeriod::get());
 
-				// Iterate through the storage map and collect all proposal ids.
-				for (_, expiry_set) in Expiry::<T>::iter() {
-					// Merge the current expiry set with the all_elements set
-					all_elements.extend(expiry_set.into_iter());
-				}
-				let _ = Expiry::<T>::clear(u32::MAX, None);
-				Expiry::<T>::insert(expired_block, all_elements);
-			}
+			Expiry::<T>::insert(expired_block, all_proposals);
 
 			// Reset all votes for current proposals.
-			for proposal_id in Votes::<T>::iter_keys() {
-				if let Some(mut casted_votes) = Votes::<T>::get(proposal_id) {
-					casted_votes.yays = BTreeSet::new();
-					casted_votes.nays = BTreeSet::new();
-					Votes::<T>::insert(proposal_id, casted_votes);
-				}
-			}
+			let _ = Votes::<T>::clear(u32::MAX, None);
 
 			// Emit event: AuthorityRotated
 			Self::deposit_event(Event::<T>::AuthorityRotated { new_council: unique_members });
