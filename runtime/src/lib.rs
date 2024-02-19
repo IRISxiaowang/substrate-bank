@@ -257,6 +257,21 @@ impl pallet_lottery::Config for Runtime {
 	type TaxRate = TaxRate;
 }
 
+parameter_types! {
+	pub const ExpiryPeriod: BlockNumber = DAY as BlockNumber;
+	pub const MajorityThreshold: Percent = Percent::from_percent(80);
+}
+
+impl pallet_governance::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type BlockNumberProvider = System;
+	type ExpiryPeriod = ExpiryPeriod;
+	type MajorityThreshold = MajorityThreshold;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type EnsureGovernance = pallet_governance::EnsureGovernance;
+}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime {
@@ -272,6 +287,7 @@ construct_runtime!(
 		Bank: pallet_bank,
 		Roles: pallet_roles,
 		Lottery: pallet_lottery,
+		Governance: pallet_governance,
 	}
 );
 
@@ -325,6 +341,7 @@ mod benches {
 		[pallet_bank, Bank]
 		[pallet_roles, Roles]
 		[pallet_lottery, Lottery]
+		[pallet_governance, Governance]
 	);
 }
 

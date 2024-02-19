@@ -90,7 +90,7 @@ fn testnet_genesis(
 		},
 		"sudo": {
 			// Assign network admin rights.
-			"key": Some(root_key),
+			"key": Some(root_key.clone()),
 		},
 		"bank": {
 			"balances": roles
@@ -107,5 +107,8 @@ fn testnet_genesis(
 		"roles": {
 			"roles": roles,
 		},
+		"governance": {
+			"initialAuthorities": vec![root_key],
+		}
 	})
 }

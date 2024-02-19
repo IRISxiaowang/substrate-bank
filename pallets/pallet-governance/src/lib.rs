@@ -13,14 +13,14 @@ use primitives::ProposalId;
 use sp_runtime::{traits::Saturating, DispatchResult, Percent, TransactionOutcome};
 use sp_std::{collections::btree_set::BTreeSet, prelude::*, vec::Vec};
 
-// mod mock;
-// mod tests;
+mod mock;
+mod tests;
 
 pub mod weights;
 pub use weights::*;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum RejectReason {
@@ -35,7 +35,7 @@ pub struct CastedVotes<AccountId> {
 	pub nays: BTreeSet<AccountId>,
 }
 
-impl<AccountId: sp_std::cmp::Ord + std::clone::Clone> CastedVotes<AccountId> {
+impl<AccountId: sp_std::cmp::Ord + Clone> CastedVotes<AccountId> {
 	/// Checks if the account with the given ID has already voted on the proposal.
 	pub fn has_voted(&self, id: &AccountId) -> bool {
 		self.yays.contains(id) || self.nays.contains(id)
@@ -194,7 +194,7 @@ pub mod module {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		initial_authorities: Vec<T::AccountId>,
+		pub initial_authorities: Vec<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
@@ -271,7 +271,7 @@ pub mod module {
 		#[pallet::weight(T::WeightInfo::initiate_proposal())]
 		pub fn initiate_proposal(
 			origin: OriginFor<T>,
-			call: <T as Config>::RuntimeCall,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			ensure!(CurrentAuthorities::<T>::get().contains(&id), Error::<T>::Unauthorized);
@@ -290,12 +290,10 @@ pub mod module {
 			});
 
 			// add vote to Votes.
-			Votes::<T>::mutate(proposal_id, |casted| {
-				casted.yays.insert(id.clone());
-			});
+			let _ = Self::do_vote(id.clone(), proposal_id, true);
 
 			// Emit Event: ProposalRegistered
-			Self::deposit_event(Event::<T>::ProposalRegistered { who: id, call });
+			Self::deposit_event(Event::<T>::ProposalRegistered { who: id, call: *call });
 
 			Ok(())
 		}
@@ -315,24 +313,8 @@ pub mod module {
 			// Proposal is valid
 			ensure!(Proposals::<T>::contains_key(proposal), Error::<T>::InvalidProposalId);
 
-			let _ = Votes::<T>::mutate(proposal, |casted| -> DispatchResult {
-				// has not voted and cast the vote
-				ensure!(casted.cast_vote(id.clone(), approve), Error::<T>::AlreadyVoted);
-
-				// check if the proposal is ready to be resolved.
-				if let Some(bool) = casted.can_resolve(
-					CurrentAuthorities::<T>::get().len() as u32,
-					T::MajorityThreshold::get(),
-				) {
-					ProposalsToResolve::<T>::get().insert((proposal, bool));
-				}
-
-				Ok(())
-			});
-			// Emit Event: VoteCasted
-			Self::deposit_event(Event::<T>::VoteCasted { who: id, proposal, approve });
-
-			Ok(())
+			// Vote
+			Self::do_vote(id.clone(), proposal, approve)
 		}
 
 		/// Requires Root origin - sets the current authorities
@@ -437,6 +419,28 @@ pub mod module {
 
 			// Emit event: AuthorityRotated
 			Self::deposit_event(Event::<T>::AuthorityRotated { new_council: unique_members });
+		}
+
+		fn do_vote(id: T::AccountId, proposal: ProposalId, approve: bool) -> DispatchResult {
+			Votes::<T>::mutate(proposal, |casted| {
+				// has not voted and cast the vote
+				ensure!(casted.cast_vote(id.clone(), approve), Error::<T>::AlreadyVoted);
+
+				// check if the proposal is ready to be resolved.
+				if let Some(bool) = casted.can_resolve(
+					CurrentAuthorities::<T>::get().len() as u32,
+					T::MajorityThreshold::get(),
+				) {
+					ProposalsToResolve::<T>::mutate(|proposals| {
+						proposals.insert((proposal, bool));
+					});
+				}
+
+				// Emit Event: VoteCasted
+				Self::deposit_event(Event::<T>::VoteCasted { who: id, proposal, approve });
+
+				Ok(())
+			})
 		}
 	}
 }
