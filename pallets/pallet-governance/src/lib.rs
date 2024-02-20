@@ -409,6 +409,25 @@ pub mod module {
 			let unique_members: BTreeSet<_> = authorities.into_iter().collect();
 			CurrentAuthorities::<T>::set(unique_members.clone());
 
+			// Identify old members
+			let old_members = CurrentAuthorities::<T>::get();
+
+			// Identify members to retain votes for
+			let members_to_retain: BTreeSet<_> =
+				unique_members.intersection(&old_members).cloned().collect();
+
+			if !members_to_retain.is_empty() {
+				for proposal_id in Votes::<T>::iter_keys() {
+					Votes::<T>::mutate(proposal_id, |casted| {
+						// Retain the votes for members included in the new authorities
+						casted.yays.retain(|member| members_to_retain.contains(member));
+						casted.nays.retain(|member| members_to_retain.contains(member));
+					});
+				}
+			} else {
+				// Reset all votes for current proposals.
+				let _ = Votes::<T>::clear(u32::MAX, None);
+			}
 			// Reset all expiry blocks
 			// Merge the current expiry set with the all_proposals set and clean up the Expiry
 			// storage.
@@ -421,9 +440,6 @@ pub mod module {
 				.saturating_add(T::ExpiryPeriod::get());
 
 			Expiry::<T>::insert(expired_block, all_proposals);
-
-			// Reset all votes for current proposals.
-			let _ = Votes::<T>::clear(u32::MAX, None);
 
 			// Emit event: AuthorityRotated
 			Self::deposit_event(Event::<T>::AuthorityRotated { new_council: unique_members });
