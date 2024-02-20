@@ -163,7 +163,7 @@ pub mod module {
 	#[pallet::storage]
 	pub type NextProposalId<T: Config> = StorageValue<_, ProposalId, ValueQuery>;
 
-	/// Stores the proposal id related the call.
+	/// Use the increased proposalId, stores the encoded extrinsic call.
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub type Proposals<T: Config> = StorageMap<_, Blake2_128Concat, ProposalId, EncodedCall>;
@@ -185,7 +185,8 @@ pub mod module {
 	#[pallet::getter(fn authorities)]
 	pub type CurrentAuthorities<T: Config> = StorageValue<_, BTreeSet<T::AccountId>, ValueQuery>;
 
-	/// Stores the resolved proposals.
+	/// Proposals that can be resolved are stored here, until the next block's on_finalize,
+	/// where the the proposal is accepted (call dispatched) or rejected.
 	#[pallet::storage]
 	#[pallet::getter(fn resolve)]
 	pub type ProposalsToResolve<T: Config> =
@@ -220,8 +221,12 @@ pub mod module {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// It dispatches each governance call which stored in the ProposalsToResolve,
+		/// and log the event passed or rejected.
+		/// Clean up the Votes and Proposals after dispatching the governance call.
+		/// Check the expiry proposals on the current block, log an event if it expired,
+		/// and tidy up the related storage.
 		fn on_finalize(block_number: BlockNumberFor<T>) {
-			// Take and process each proposal that needs dispatch the governance call.
 			ProposalsToResolve::<T>::take().into_iter().for_each(|(proposal, approved)| {
 				// Decode the proposal call if it exists.
 				if let Some(Ok(call)) = Proposals::<T>::take(proposal)
@@ -264,7 +269,8 @@ pub mod module {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Registered a proposal.
+		/// Registered a proposal which needs voted by council members in limit time.
+		/// Default the caller voted pass and log a register event.
 		///
 		/// Require a member from council.
 		#[pallet::call_index(0)]
@@ -317,7 +323,9 @@ pub mod module {
 			Self::do_vote(id.clone(), proposal, approve)
 		}
 
-		/// Requires Root origin - sets the current authorities
+		/// Requires Root origin - sets the current authorities.
+		/// Clear old votes from old authorities and extend voting period for new authorities to
+		/// vote.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::force_rotate_authorities())]
 		pub fn force_rotate_authorities(
@@ -385,7 +393,7 @@ pub mod module {
 			})
 		}
 
-		/// Increased proposal ID.
+		/// Returned the next proposal ID which is increased one each time.
 		fn next_proposal_id() -> ProposalId {
 			NextProposalId::<T>::mutate(|id| {
 				*id = id.wrapping_add(1);

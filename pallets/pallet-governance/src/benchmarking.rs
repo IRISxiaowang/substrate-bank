@@ -38,7 +38,7 @@ mod benchmarks {
 		let first_proposal = 1u32;
 
 		CurrentAuthorities::<T>::set(BTreeSet::from([caller.clone(), caller_2.clone()]));
-		let _ = Pallet::<T>::initiate_proposal(RawOrigin::Signed(caller.clone()).into(), call);
+		assert_ok!(Pallet::<T>::initiate_proposal(RawOrigin::Signed(caller.clone()).into(), call));
 
 		#[extrinsic_call]
 		vote(RawOrigin::Signed(caller_2.clone()), first_proposal, true);

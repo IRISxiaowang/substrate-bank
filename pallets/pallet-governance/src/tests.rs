@@ -4,6 +4,12 @@ use crate::{mock::*, *};
 
 use frame_support::{assert_noop, assert_ok};
 
+fn assert_storage_cleaned_up(first_proposal: ProposalId) {
+	assert!(!Votes::<Runtime>::contains_key(first_proposal),);
+	assert_eq!(ProposalsToResolve::<Runtime>::get(), Default::default());
+	assert!(!Proposals::<Runtime>::contains_key(first_proposal));
+}
+
 #[test]
 fn can_initiate_proposal() {
 	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
@@ -87,8 +93,10 @@ fn can_vote() {
 			let first_proposal = 1u32;
 			Proposals::<Runtime>::set(first_proposal, Some(call.encode()));
 
-			// There are 7 persons voted yes, to test when the 8th person vote, it not resolve yet,
-			// but after the 9th person voted, it will be reserved.
+			// The MajorityThreshold is 80%, in this case,
+			// which needs 9 people vote pass or 2 people vote reject to resolve the proposal.
+			// So that setup 7 people had voted pass, and test that 8 people vote pass or 1 people
+			// reject would not resolve the proposal until the number reached 9 pass or 2 reject.
 			Votes::<Runtime>::set(
 				first_proposal,
 				CastedVotes { yays: (14..21).collect::<BTreeSet<_>>(), nays: Default::default() },
@@ -166,7 +174,7 @@ fn can_vote() {
 }
 
 #[test]
-fn cannot_vote_with_invaild_authority() {
+fn cannot_vote_with_invalid_authority() {
 	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
@@ -191,7 +199,7 @@ fn cannot_vote_with_invaild_authority() {
 }
 
 #[test]
-fn cannot_vote_with_invaild_proposal() {
+fn cannot_vote_with_invalid_proposal() {
 	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
@@ -221,23 +229,84 @@ fn cannot_vote_twice() {
 			let call = Box::new(RuntimeCall::Governance(crate::Call::council_rotate_authorities {
 				new_members: (21..31).collect::<Vec<_>>(),
 			}));
-			let has_voted_authority_member: AccountId = 11;
+			let has_voted_pass_member: AccountId = 11;
+			let has_voted_reject_member: AccountId = 16;
 			let first_proposal = 1u32;
 			Proposals::<Runtime>::set(first_proposal, Some(call.encode()));
 
 			Votes::<Runtime>::set(
 				first_proposal,
-				CastedVotes { yays: (11..15).collect::<BTreeSet<_>>(), nays: Default::default() },
+				CastedVotes { yays: (11..15).collect::<BTreeSet<_>>(), nays: BTreeSet::from([16]) },
 			);
 
-			// Ensures that an unauthorized member cannot vote on a proposal.
+			// Ensures that the authorized member cannot vote twice on one proposal.
 			assert_noop!(
 				Governance::vote(
-					RuntimeOrigin::signed(has_voted_authority_member),
+					RuntimeOrigin::signed(has_voted_pass_member),
 					first_proposal,
 					true
 				),
 				Error::<Runtime>::AlreadyVoted
+			);
+
+			assert_noop!(
+				Governance::vote(
+					RuntimeOrigin::signed(has_voted_reject_member),
+					first_proposal,
+					true
+				),
+				Error::<Runtime>::AlreadyVoted
+			);
+		});
+}
+
+#[test]
+fn cannot_vote_after_proposal_resolved() {
+	MockGenesisConfig::with_authorities((11..22).collect::<Vec<_>>())
+		.build()
+		.execute_with(|| {
+			// Setup data.
+			let call = Box::new(RuntimeCall::Governance(crate::Call::council_rotate_authorities {
+				new_members: (21..31).collect::<Vec<_>>(),
+			}));
+			let authority_member: AccountId = 21;
+			let first_proposal = 1u32;
+			Proposals::<Runtime>::set(first_proposal, Some(call.encode()));
+
+			// Case1: proposal passed
+			ProposalsToResolve::<Runtime>::set(BTreeSet::from([(first_proposal, true)]));
+
+			// dispatch
+			Governance::on_finalize(System::block_number());
+
+			// Can not vote after the proposal passed.
+			assert_noop!(
+				Governance::vote(RuntimeOrigin::signed(authority_member), first_proposal, true),
+				Error::<Runtime>::InvalidProposalId
+			);
+
+			// Case2: proposal rejected
+			ProposalsToResolve::<Runtime>::set(BTreeSet::from([(first_proposal, false)]));
+
+			// dispatch
+			Governance::on_finalize(System::block_number());
+
+			// Can not vote after the proposal rejected.
+			assert_noop!(
+				Governance::vote(RuntimeOrigin::signed(authority_member), first_proposal, true),
+				Error::<Runtime>::InvalidProposalId
+			);
+
+			// Case3: proposal expired
+			Expiry::<Runtime>::set(System::block_number(), BTreeSet::from([first_proposal]));
+
+			// dispatch
+			Governance::on_finalize(System::block_number());
+
+			// Can not vote after the proposal expired.
+			assert_noop!(
+				Governance::vote(RuntimeOrigin::signed(authority_member), first_proposal, true),
+				Error::<Runtime>::InvalidProposalId
 			);
 		});
 }
@@ -262,7 +331,7 @@ fn can_force_rotate_authorities() {
 }
 
 #[test]
-fn can_end_to_end_council_rotate_authorities() {
+fn can_council_rotate_authorities() {
 	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
@@ -290,12 +359,7 @@ fn can_end_to_end_council_rotate_authorities() {
 			// Verify the authorities are set.
 			assert_eq!(CurrentAuthorities::<Runtime>::get(), (21..31).collect::<BTreeSet<_>>());
 
-			assert_eq!(
-				Votes::<Runtime>::get(first_proposal),
-				CastedVotes { yays: Default::default(), nays: Default::default() }
-			);
-			assert_eq!(ProposalsToResolve::<Runtime>::get(), Default::default());
-			assert_eq!(Proposals::<Runtime>::get(first_proposal), None);
+			assert_storage_cleaned_up(first_proposal);
 
 			System::assert_has_event(RuntimeEvent::Governance(
 				Event::<Runtime>::AuthorityRotated {
@@ -338,19 +402,19 @@ fn can_expired_council_rotate_authorities() {
 			// Expire the proposal.
 			Governance::on_finalize(System::block_number() + EXPIRY_PERIOD);
 
-			// Verify the authorities are original.
+			// Verify the authorities are unchanged.
 			assert_eq!(CurrentAuthorities::<Runtime>::get(), (11..21).collect::<BTreeSet<_>>());
 
-			assert_eq!(
-				Votes::<Runtime>::get(first_proposal),
-				CastedVotes { yays: Default::default(), nays: Default::default() }
-			);
-			assert_eq!(ProposalsToResolve::<Runtime>::get(), Default::default());
-			assert_eq!(Proposals::<Runtime>::get(first_proposal), None);
-			assert_eq!(
-				Expiry::<Runtime>::get(System::block_number() + EXPIRY_PERIOD),
-				Default::default()
-			);
+			assert_storage_cleaned_up(first_proposal);
+
+			assert!(!Expiry::<Runtime>::contains_key(System::block_number() + EXPIRY_PERIOD));
+
+			System::assert_last_event(RuntimeEvent::Governance(
+				Event::<Runtime>::ProposalRejected {
+					id: first_proposal,
+					reason: RejectReason::Expired,
+				},
+			));
 		});
 }
 
@@ -380,15 +444,10 @@ fn can_reject_council_rotate_authorities() {
 			// dispatch
 			Governance::on_finalize(System::block_number());
 
-			// Verify the authorities are set.
+			// Verify the authorities should be unchanged.
 			assert_eq!(CurrentAuthorities::<Runtime>::get(), (11..21).collect::<BTreeSet<_>>());
 
-			assert_eq!(
-				Votes::<Runtime>::get(first_proposal),
-				CastedVotes { yays: Default::default(), nays: Default::default() }
-			);
-			assert_eq!(ProposalsToResolve::<Runtime>::get(), Default::default());
-			assert_eq!(Proposals::<Runtime>::get(first_proposal), None);
+			assert_storage_cleaned_up(first_proposal);
 
 			System::assert_has_event(RuntimeEvent::Governance(
 				Event::<Runtime>::ProposalRejected {
@@ -408,7 +467,7 @@ fn can_resolve_after_proposal() {
 		let authority_member: AccountId = 11;
 		let first_proposal = 1u32;
 
-		// Test the function initiate_proposal works.
+		// Asserts that initiating a proposal with the specified origin and call is successful.
 		assert_ok!(Governance::initiate_proposal(
 			RuntimeOrigin::signed(authority_member),
 			call.clone()
@@ -420,12 +479,7 @@ fn can_resolve_after_proposal() {
 		// Verify the authorities are set.
 		assert_eq!(CurrentAuthorities::<Runtime>::get(), (21..31).collect::<BTreeSet<_>>());
 
-		assert_eq!(Proposals::<Runtime>::get(first_proposal), None);
-
-		assert_eq!(
-			Votes::<Runtime>::get(first_proposal),
-			CastedVotes { yays: Default::default(), nays: Default::default() }
-		);
+		assert_storage_cleaned_up(first_proposal);
 
 		let last_event = System::events().last().unwrap().event.clone();
 		matches!(last_event, RuntimeEvent::Governance(Event::<Runtime>::ProposalPassed {
