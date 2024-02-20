@@ -52,6 +52,8 @@ frame-system-benchmarking = { default-features = false, git = "https://github.co
 pallet-bank = { default-features = false, path = "../pallets/pallet-bank" }
 pallet-roles = { default-features = false, path = "../pallets/pallet-roles" }
 pallet-lottery = { default-features = false, path = "../pallets/pallet-lottery" }
+pallet-governance = { default-features = false, path = "../pallets/pallet-governance" }
+
 primitives = { default-features = false, path = "../primitives" }
 traits = { default-features = false, path = "../traits" }
 
@@ -98,6 +100,7 @@ std = [
 	"pallet-bank/std",
 	"pallet-roles/std",
 	"pallet-lottery/std",
+	"pallet-governance/std",
 
 	"primitives/std",
 	"traits/std",
@@ -116,6 +119,8 @@ runtime-benchmarks = [
 	"pallet-bank/runtime-benchmarks",
 	"pallet-roles/runtime-benchmarks",
 	"pallet-lottery/runtime-benchmarks",
+	"pallet-governance/runtime-benchmarks",
+
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
@@ -133,4 +138,6 @@ try-runtime = [
 	"pallet-bank/try-runtime",
 	"pallet-roles/try-runtime",
 	"pallet-lottery/try-runtime",
+	"pallet-governance/try-runtime",
+
 ]

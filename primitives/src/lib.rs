@@ -93,3 +93,6 @@ pub type LockId = u64;
 /// Some way of identifying an account on the chain. We intentionally make it equivalent
 /// to the public key of our transaction signing scheme.
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+
+/// Proposal Id
+pub type ProposalId = u32;

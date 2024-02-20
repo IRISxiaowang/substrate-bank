@@ -11,6 +11,7 @@ members = [
     "pallets/pallet-roles",
     "pallets/pallet-bank",
     "pallets/pallet-lottery",
+    "pallets/pallet-governance",
 	"primitives",
 	"traits",
     "runtime",
