@@ -489,3 +489,77 @@ fn can_resolve_after_proposal() {
 		}) if id == first_proposal && call == call );
 	});
 }
+
+#[test]
+fn rotate_authorities_can_retain_votes() {
+	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+		.build()
+		.execute_with(|| {
+			// Setup data
+			let call = Box::new(RuntimeCall::Governance(crate::Call::council_rotate_authorities {
+				new_members: (21..31).collect::<Vec<_>>(),
+			}));
+			let authority_member: AccountId = 11;
+			let first_proposal = 1u32;
+			let mix_old_and_new_members = (15..25).collect::<Vec<_>>();
+			// Propose
+			assert_ok!(Governance::initiate_proposal(
+				RuntimeOrigin::signed(authority_member),
+				call.clone()
+			));
+
+			// Vote 7 tickets passed which includes 15-18 from new council.
+			for i in 12..19 {
+				assert_ok!(Governance::vote(RuntimeOrigin::signed(i), first_proposal, true));
+			}
+			// The 19 voted reject.
+			assert_ok!(Governance::vote(RuntimeOrigin::signed(19), first_proposal, false));
+
+			// Verify the votes.
+			assert_eq!(
+				Votes::<Runtime>::get(first_proposal),
+				CastedVotes { yays: (11..19).collect::<BTreeSet<_>>(), nays: BTreeSet::from([19]) }
+			);
+
+			// Force rotate authorities which contains some old authority members
+			assert_ok!(Governance::force_rotate_authorities(
+				RuntimeOrigin::root(),
+				mix_old_and_new_members
+			));
+
+			// Verify the current authorities changed to mix_old_and_new_members.
+			assert_eq!(CurrentAuthorities::<Runtime>::get(), (15..25).collect::<BTreeSet<_>>());
+
+			// The votes retained by who is still the new council member.
+			assert_eq!(
+				Votes::<Runtime>::get(first_proposal),
+				CastedVotes { yays: (15..19).collect::<BTreeSet<_>>(), nays: BTreeSet::from([19]) }
+			);
+
+			// Vote 5 tickets passed which includes 19-24 from new council.
+			for i in 20..25 {
+				assert_ok!(Governance::vote(RuntimeOrigin::signed(i), first_proposal, true));
+			}
+
+			// dispatch
+			Governance::on_finalize(System::block_number());
+
+			// Verify the authorities should changed again because of passing the proposal.
+			assert_eq!(CurrentAuthorities::<Runtime>::get(), (21..31).collect::<BTreeSet<_>>());
+
+			assert_storage_cleaned_up(first_proposal);
+
+			System::assert_has_event(RuntimeEvent::Governance(
+				Event::<Runtime>::AuthorityRotated {
+					new_council: (21..31).collect::<BTreeSet<_>>(),
+				},
+			));
+
+			let last_event = System::events().last().unwrap().event.clone();
+			matches!(last_event, RuntimeEvent::Governance(Event::<Runtime>::ProposalPassed {
+				id,
+				call,
+				result: Ok(..),
+			}) if id == first_proposal && call == call );
+		});
+}
