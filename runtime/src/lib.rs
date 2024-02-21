@@ -250,6 +250,7 @@ impl pallet_lottery::Config for Runtime {
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
+	type EnsureGovernance = pallet_governance::EnsureGovernance;
 	type Bank = Bank;
 	type Randomness = Random;
 	type LotteryPayoutPeriod = LotteryPayoutPeriod;

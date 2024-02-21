@@ -87,6 +87,7 @@ impl Config for Runtime {
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
+	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type Bank = Bank;
 	type Randomness = MockRandom;
 	type LotteryPayoutPeriod = LotteryPayoutPeriod;

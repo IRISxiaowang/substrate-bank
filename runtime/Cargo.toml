@@ -120,7 +120,7 @@ runtime-benchmarks = [
 	"pallet-roles/runtime-benchmarks",
 	"pallet-lottery/runtime-benchmarks",
 	"pallet-governance/runtime-benchmarks",
-
+	"traits/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",

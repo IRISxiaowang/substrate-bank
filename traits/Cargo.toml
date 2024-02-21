@@ -6,6 +6,9 @@ description = "Contains traits shared across the code base."
 
 [dependencies]
 sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
 
 primitives = { path = "../primitives", default-features = false }
 
@@ -14,4 +17,12 @@ default = ["std"]
 std = [
     "sp-runtime/std",
     "primitives/std",
+    "frame-support/std",
+	"frame-system/std",
+	"sp-std/std",    
+]
+runtime-benchmarks = [
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 ]

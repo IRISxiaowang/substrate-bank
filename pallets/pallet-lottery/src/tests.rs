@@ -298,3 +298,61 @@ fn select_winner_works() {
 		}
 	});
 }
+
+#[test]
+fn force_draw_works() {
+	let mock = MockGenesisConfig { balance: vec![], lotteries: vec![] };
+	mock.with_balances(vec![
+		(ALICE, INITIAL_BALANCE),
+		(BOB, INITIAL_BALANCE),
+		(CHARLIE, INITIAL_BALANCE),
+		(DAVE, INITIAL_BALANCE),
+	])
+	.with_lotteries(vec![(ALICE, 10), (BOB, 50), (CHARLIE, 40), (DAVE, 100)])
+	.build()
+	.execute_with(|| {
+		RandomOutput::set(0u32);
+		let total: Balance = 200 * DOLLAR;
+		let tax = TAX_RATE * total;
+		assert_ok!(Lottery::force_draw(RuntimeOrigin::root()));
+
+		// Select the winner
+		Lottery::on_finalize(System::block_number());
+
+		// Verify winner DAVE is chosen.
+		System::assert_last_event(RuntimeEvent::Lottery(Event::<Runtime>::LotteryWon {
+			user: DAVE,
+			won_fund: total - tax,
+			tax,
+		}));
+
+		// Next round
+		// Buy tickets
+		assert_ok!(Lottery::buy_ticket(RuntimeOrigin::signed(ALICE), 10));
+		assert_ok!(Lottery::buy_ticket(RuntimeOrigin::signed(BOB), 20));
+
+		let total_2 = 30 * DOLLAR;
+		let tax_2 = TAX_RATE * total_2;
+
+		// Verify draw on the correct block
+		Lottery::on_finalize(System::block_number() + LOTTERY_PAYOUT_PERIOD);
+
+		// Verify
+		System::assert_has_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketsBought {
+			id: ALICE,
+			number: 10u32,
+			total_price: 10 * DOLLAR,
+		}));
+		System::assert_has_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketsBought {
+			id: BOB,
+			number: 20u32,
+			total_price: 20 * DOLLAR,
+		}));
+		// Verify winner Alice is chosen.
+		System::assert_last_event(RuntimeEvent::Lottery(Event::<Runtime>::LotteryWon {
+			user: BOB,
+			won_fund: total_2 - tax_2,
+			tax: tax_2,
+		}));
+	});
+}

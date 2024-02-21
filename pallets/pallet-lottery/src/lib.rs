@@ -57,6 +57,8 @@ pub mod module {
 
 		type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
 
+		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
+
 		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		#[pallet::constant]
@@ -99,6 +101,10 @@ pub mod module {
 	pub type PrizeSplit<T: Config> = StorageValue<_, Vec<Percent>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn start_block)]
+	pub type StartBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn ticket_price)]
 	pub type TicketPrice<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
@@ -132,7 +138,13 @@ pub mod module {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// check if we should payout this block
-			if (block_number % T::LotteryPayoutPeriod::get()).is_zero() {
+			// if (block_number % T::LotteryPayoutPeriod::get()).is_zero() {
+			// 	let _ = Self::resolve_lottery_winner();
+			// }
+			let start = StartBlock::<T>::get();
+			if block_number == start ||
+				((block_number - start) % T::LotteryPayoutPeriod::get()).is_zero()
+			{
 				let _ = Self::resolve_lottery_winner();
 			}
 		}
@@ -205,6 +217,20 @@ pub mod module {
 				number: number_of_tickets,
 				total_price,
 			});
+
+			Ok(())
+		}
+
+		/// Finalize the lottery at the current block.
+		///
+		/// Require governance.
+		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::force_draw())]
+		pub fn force_draw(origin: OriginFor<T>) -> DispatchResult {
+			// ensure governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			StartBlock::<T>::set(T::BlockNumberProvider::current_block_number());
 
 			Ok(())
 		}
