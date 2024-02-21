@@ -512,11 +512,13 @@ fn rotate_authorities_can_retain_votes() {
 			for i in 12..19 {
 				assert_ok!(Governance::vote(RuntimeOrigin::signed(i), first_proposal, true));
 			}
+			// The 19 voted reject.
+			assert_ok!(Governance::vote(RuntimeOrigin::signed(19), first_proposal, false));
 
 			// Verify the votes.
 			assert_eq!(
 				Votes::<Runtime>::get(first_proposal),
-				CastedVotes { yays: (11..19).collect::<BTreeSet<_>>(), nays: Default::default() }
+				CastedVotes { yays: (11..19).collect::<BTreeSet<_>>(), nays: BTreeSet::from([19]) }
 			);
 
 			// Force rotate authorities which contains some old authority members
@@ -531,14 +533,13 @@ fn rotate_authorities_can_retain_votes() {
 			// The votes retained by who is still the new council member.
 			assert_eq!(
 				Votes::<Runtime>::get(first_proposal),
-				CastedVotes { yays: (15..19).collect::<BTreeSet<_>>(), nays: Default::default() }
+				CastedVotes { yays: (15..19).collect::<BTreeSet<_>>(), nays: BTreeSet::from([19]) }
 			);
 
 			// Vote 5 tickets passed which includes 19-24 from new council.
-			for i in 19..24 {
+			for i in 20..25 {
 				assert_ok!(Governance::vote(RuntimeOrigin::signed(i), first_proposal, true));
 			}
-			assert_ok!(Governance::vote(RuntimeOrigin::signed(24), first_proposal, false));
 
 			// dispatch
 			Governance::on_finalize(System::block_number());

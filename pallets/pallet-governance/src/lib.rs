@@ -79,6 +79,13 @@ impl<AccountId: sp_std::cmp::Ord + Clone> CastedVotes<AccountId> {
 			None
 		}
 	}
+
+	/// Remove all votes that are not in the `retain` set.
+	pub fn cull_votes(&mut self, retain: BTreeSet<AccountId>) {
+		// Retain the votes for members included in the new authorities
+		self.yays.retain(|member| retain.contains(member));
+		self.nays.retain(|member| retain.contains(member));
+	}
 }
 
 impl<AccountId> Default for CastedVotes<AccountId> {
@@ -405,12 +412,12 @@ pub mod module {
 		/// Resetting expiry blocks, clearing votes for current proposals, and emitting an event to
 		/// notify interested parties about the authority rotation and the new council members.
 		fn do_rotate_authorities(authorities: Vec<T::AccountId>) {
+			// Identify old members
+			let old_members = CurrentAuthorities::<T>::take();
+
 			// Sets the new authority
 			let unique_members: BTreeSet<_> = authorities.into_iter().collect();
 			CurrentAuthorities::<T>::set(unique_members.clone());
-
-			// Identify old members
-			let old_members = CurrentAuthorities::<T>::get();
 
 			// Identify members to retain votes for
 			let members_to_retain: BTreeSet<_> =
@@ -420,8 +427,7 @@ pub mod module {
 				for proposal_id in Votes::<T>::iter_keys() {
 					Votes::<T>::mutate(proposal_id, |casted| {
 						// Retain the votes for members included in the new authorities
-						casted.yays.retain(|member| members_to_retain.contains(member));
-						casted.nays.retain(|member| members_to_retain.contains(member));
+						casted.cull_votes(members_to_retain.clone());
 					});
 				}
 			} else {
