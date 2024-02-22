@@ -4,7 +4,7 @@
 
 use super::*;
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime, derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64, Everything},
 };
 
@@ -29,6 +29,7 @@ pub const INTEREST_PAYOUT_PERIOD: u64 = 100;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type BlockNumber = u64;
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
