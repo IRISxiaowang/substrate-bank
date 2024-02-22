@@ -3,10 +3,10 @@
 use super::*;
 
 use frame_benchmarking::v2::*;
-use frame_support::assert_ok;
+use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 use frame_system::RawOrigin;
 use primitives::DOLLAR;
-use sp_runtime::Percent;
+use sp_runtime::{traits::BlockNumberProvider, Percent};
 
 #[benchmarks]
 mod benchmarks {
@@ -53,5 +53,18 @@ mod benchmarks {
 		assert_eq!(T::Bank::free_balance(&T::PrizePoolAccount::get()), (DOLLAR * 10).into());
 	}
 
+	#[benchmark]
+	fn force_draw() {
+		let call = Call::<T>::force_draw {};
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
+		// Verify
+		assert_eq!(StartBlock::<T>::get(), T::BlockNumberProvider::current_block_number());
+	}
 	impl_benchmark_test_suite!(Pallet, crate::mock::default_test_ext(), crate::mock::Runtime);
 }

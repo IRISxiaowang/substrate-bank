@@ -6,6 +6,8 @@ use sp_runtime::{DispatchError, DispatchResult};
 
 use primitives::Role;
 
+use sp_std::marker::PhantomData;
+
 /// Trait for managing user roles.
 pub trait ManageRoles<AccountId> {
 	/// Get the role of a given user.
@@ -35,4 +37,21 @@ pub trait Stakable<AccountId, Balance> {
 /// A trait for getting the treasury account.
 pub trait GetTreasury<AccountId> {
 	fn treasury() -> Result<AccountId, DispatchError>;
+}
+
+pub struct SuccessOrigin<T>(PhantomData<T>);
+
+impl<T: frame_system::Config> frame_support::traits::EnsureOrigin<T::RuntimeOrigin>
+	for SuccessOrigin<T>
+{
+	type Success = ();
+
+	fn try_origin(_o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
+		Ok(())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
+		Ok(frame_system::RawOrigin::Root.into())
+	}
 }
