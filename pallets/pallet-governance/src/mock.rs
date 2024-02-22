@@ -2,7 +2,7 @@
 
 use super::*;
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime, derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64, Everything},
 };
 
@@ -18,6 +18,7 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 pub const EXPIRY_PERIOD: u64 = 100;
 pub const MAJORITY_THRESHOLD: Percent = Percent::from_percent(80);
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
