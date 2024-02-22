@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "Contains traits shared across the code base."
 
+[lints]
+workspace = true
+
 [dependencies]
-sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
-frame-support = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
-frame-system = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
-sp-std = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.5.0" }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
 
 primitives = { path = "../primitives", default-features = false }
 

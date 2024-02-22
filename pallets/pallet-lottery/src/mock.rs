@@ -2,7 +2,7 @@
 
 use super::*;
 use frame_support::{
-	assert_ok, construct_runtime, parameter_types,
+	assert_ok, construct_runtime, derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64, Everything, Randomness},
 };
 
@@ -35,6 +35,7 @@ pub const REDEEM_PERIOD: u64 = 200;
 pub const STAKE_PERIOD: u64 = 150;
 pub const INTEREST_PAYOUT_PERIOD: u64 = 100;
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
