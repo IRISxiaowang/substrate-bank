@@ -312,6 +312,7 @@ fn force_draw_works() {
 	.build()
 	.execute_with(|| {
 		RandomOutput::set(0u32);
+		System::set_block_number(9999);
 		let total: Balance = 200 * DOLLAR;
 		let tax = TAX_RATE * total;
 		assert_ok!(Lottery::force_draw(RuntimeOrigin::root()));
@@ -334,10 +335,21 @@ fn force_draw_works() {
 		let total_2 = 30 * DOLLAR;
 		let tax_2 = TAX_RATE * total_2;
 
+		// Test the lottery is not ready to draw.
+		Lottery::on_finalize(System::block_number() + LOTTERY_PAYOUT_PERIOD - 2);
+		Lottery::on_finalize(System::block_number() + LOTTERY_PAYOUT_PERIOD - 1);
+		Lottery::on_finalize(System::block_number() + LOTTERY_PAYOUT_PERIOD + 1);
+		Lottery::on_finalize(System::block_number() + LOTTERY_PAYOUT_PERIOD + 2);
+
+		// Verify `PrizePoolAccount` has total lottery
+		assert_eq!(Bank::free_balance(&PRIZE_POOL_ACCOUNT), total_2);
+
 		// Verify draw on the correct block
 		Lottery::on_finalize(System::block_number() + LOTTERY_PAYOUT_PERIOD);
 
-		// Verify
+		// Verify `PrizePoolAccount` paid out all the prize.
+		assert_eq!(Bank::free_balance(&PRIZE_POOL_ACCOUNT), 0);
+
 		System::assert_has_event(RuntimeEvent::Lottery(Event::<Runtime>::TicketsBought {
 			id: ALICE,
 			number: 10u32,

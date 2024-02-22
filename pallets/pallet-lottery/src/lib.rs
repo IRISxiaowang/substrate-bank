@@ -138,14 +138,11 @@ pub mod module {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// check if we should payout this block
-			// if (block_number % T::LotteryPayoutPeriod::get()).is_zero() {
-			// 	let _ = Self::resolve_lottery_winner();
-			// }
-			let start = StartBlock::<T>::get();
-			if block_number == start ||
-				((block_number - start) % T::LotteryPayoutPeriod::get()).is_zero()
+			if (block_number.saturating_sub(StartBlock::<T>::get()) % T::LotteryPayoutPeriod::get())
+				.is_zero()
 			{
 				let _ = Self::resolve_lottery_winner();
+				StartBlock::<T>::set(block_number);
 			}
 		}
 	}
