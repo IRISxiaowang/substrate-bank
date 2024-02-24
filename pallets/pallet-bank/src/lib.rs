@@ -572,6 +572,10 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 		});
 		Ok(())
 	}
+
+	fn staked(user: &T::AccountId) -> T::Balance {
+		Accounts::<T>::get(user).reserved
+	}
 }
 
 impl<T: Config> GetTreasury<T::AccountId> for Pallet<T> {

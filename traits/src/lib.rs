@@ -32,6 +32,7 @@ pub trait BasicAccounting<AccountId, Balance> {
 pub trait Stakable<AccountId, Balance> {
 	fn stake_funds(user: &AccountId, amount: Balance) -> DispatchResult;
 	fn redeem_funds(user: &AccountId, amount: Balance) -> DispatchResult;
+	fn staked(user: &AccountId) -> Balance;
 }
 
 /// A trait for getting the treasury account.
