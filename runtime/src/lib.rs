@@ -226,9 +226,9 @@ impl pallet_bank::Config for Runtime {
 	type BlockNumberProvider = System;
 	type ExistentialDeposit = ConstU128<DOLLAR>;
 	type MinimumAmount = MinimumAmount;
-	type RedeemPeriod = ConstU32<200>;
-	type StakePeriod = ConstU32<150>;
-	type InterestPayoutPeriod = ConstU32<100>;
+	type RedeemPeriod = ConstU32<{ 5 * DAY }>;
+	type StakePeriod = ConstU32<{ 2 * DAY }>;
+	type InterestPayoutPeriod = ConstU32<DAY>;
 	type TotalBlocksPerYear = ConstU32<YEAR>;
 }
 
