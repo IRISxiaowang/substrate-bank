@@ -2,8 +2,8 @@
 
 use crate::{
 	mock::{
-		default_test_ext, AccountRole, MockGenesisConfig, Runtime, RuntimeEvent, RuntimeOrigin,
-		System, ALICE, BOB,
+		default_test_ext, MockGenesisConfig, Roles, Runtime, RuntimeEvent, RuntimeOrigin, System,
+		ALICE, BOB, CHARLIE,
 	},
 	*,
 };
@@ -16,16 +16,16 @@ fn can_register_role() {
 		assert_eq!(None, AccountRoles::<Runtime>::get(ALICE));
 
 		// Register Alice with the role
-		assert_ok!(AccountRole::register(RuntimeOrigin::signed(ALICE), role));
+		assert_ok!(Roles::register(RuntimeOrigin::signed(ALICE)));
 
 		// Check that the event was emitted
 		assert_eq!(
 			System::events()[0].event,
-			RuntimeEvent::AccountRole(Event::<Runtime>::RoleRegistered { user: ALICE, role })
+			RuntimeEvent::Roles(Event::<Runtime>::RoleRegistered { user: ALICE, role })
 		);
 
 		// Check that Alice's role was registered
-		assert_eq!(AccountRole::role(&ALICE), Some(role));
+		assert_eq!(Roles::role(&ALICE), Some(role));
 	});
 }
 
@@ -34,15 +34,15 @@ fn cannot_reregister_role() {
 	default_test_ext().execute_with(|| {
 		let role = Role::Customer;
 		// Register Alice with the role
-		assert_ok!(AccountRole::register(RuntimeOrigin::signed(ALICE), role));
+		assert_ok!(Roles::register(RuntimeOrigin::signed(ALICE)));
 		System::reset_events();
 
 		// Try to register again
 		assert_noop!(
-			AccountRole::register(RuntimeOrigin::signed(ALICE), Role::Auditor),
+			Roles::register(RuntimeOrigin::signed(ALICE)),
 			Error::<Runtime>::AccountAlreadyRegistered
 		);
-		assert_eq!(AccountRole::role(&ALICE), Some(role));
+		assert_eq!(Roles::role(&ALICE), Some(role));
 		assert!(System::events().is_empty());
 	});
 }
@@ -51,21 +51,21 @@ fn cannot_reregister_role() {
 fn can_unregister_role() {
 	default_test_ext().execute_with(|| {
 		let role = Role::Customer;
-		assert_ok!(AccountRole::register(RuntimeOrigin::signed(ALICE), role));
-		assert_eq!(AccountRole::role(&ALICE), Some(role));
+		assert_ok!(Roles::register(RuntimeOrigin::signed(ALICE)));
+		assert_eq!(Roles::role(&ALICE), Some(role));
 		System::reset_events();
 
-		assert_ok!(AccountRole::unregister(RuntimeOrigin::signed(ALICE)));
-		assert_eq!(AccountRole::role(&ALICE), None);
+		assert_ok!(Roles::unregister(RuntimeOrigin::signed(ALICE)));
+		assert_eq!(Roles::role(&ALICE), None);
 		// Check that the event was emitted
 		assert_eq!(
 			System::events()[0].event,
-			RuntimeEvent::AccountRole(Event::<Runtime>::RoleUnregistered { user: ALICE })
+			RuntimeEvent::Roles(Event::<Runtime>::RoleUnregistered { user: ALICE })
 		);
 
 		// Check that Alice's role was unregistered
 		assert_noop!(
-			AccountRole::unregister(RuntimeOrigin::signed(ALICE)),
+			Roles::unregister(RuntimeOrigin::signed(ALICE)),
 			Error::<Runtime>::AccountRoleNotRegistered
 		);
 	});
@@ -79,4 +79,52 @@ fn can_bulid() {
 			assert_eq!(AccountRoles::<Runtime>::get(ALICE), Some(Role::Manager));
 			assert_eq!(AccountRoles::<Runtime>::get(BOB), Some(Role::Customer));
 		});
+}
+
+#[test]
+fn can_governance_register_role() {
+	default_test_ext().execute_with(|| {
+		let manager = Role::Manager;
+		let auditor = Role::Auditor;
+		let customer = Role::Customer;
+		assert_eq!(None, AccountRoles::<Runtime>::get(ALICE));
+		assert_eq!(None, AccountRoles::<Runtime>::get(BOB));
+		assert_eq!(None, AccountRoles::<Runtime>::get(CHARLIE));
+
+		// Register Alice with the manager role
+		assert_ok!(Roles::register_role_governance(RuntimeOrigin::root(), ALICE, manager));
+
+		// Check that the event was emitted
+		assert_eq!(
+			System::events()[0].event,
+			RuntimeEvent::Roles(Event::<Runtime>::RoleRegistered { user: ALICE, role: manager })
+		);
+
+		// Check that Alice's role was registered
+		assert_eq!(Roles::role(&ALICE), Some(manager));
+
+		// Register Bob with the manager role
+		assert_ok!(Roles::register_role_governance(RuntimeOrigin::root(), BOB, auditor));
+
+		// Check that the event was emitted
+		assert_eq!(
+			System::events()[1].event,
+			RuntimeEvent::Roles(Event::<Runtime>::RoleRegistered { user: BOB, role: auditor })
+		);
+
+		// Check that Bob's role was registered
+		assert_eq!(Roles::role(&BOB), Some(auditor));
+
+		// Register Charlie with the manager role
+		assert_ok!(Roles::register_role_governance(RuntimeOrigin::root(), CHARLIE, customer));
+
+		// Check that the event was emitted
+		assert_eq!(
+			System::events()[2].event,
+			RuntimeEvent::Roles(Event::<Runtime>::RoleRegistered { user: CHARLIE, role: customer })
+		);
+
+		// Check that Charlie's role was registered
+		assert_eq!(Roles::role(&CHARLIE), Some(customer));
+	});
 }
