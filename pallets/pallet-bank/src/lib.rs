@@ -192,6 +192,7 @@ pub mod module {
 
 	/// Stores the interest rate.
 	#[pallet::storage]
+	#[pallet::getter(fn interest_rate)]
 	pub type InterestRate<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	/// Stores the treasury account.
@@ -336,7 +337,6 @@ pub mod module {
 		#[pallet::weight(T::WeightInfo::stake_funds())]
 		pub fn stake_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
 			let user = ensure_signed(origin)?;
-			T::RoleManager::ensure_role(&user, Role::Customer)?;
 			<Self as Stakable<T::AccountId, T::Balance>>::stake_funds(&user, amount)
 		}
 
@@ -345,7 +345,6 @@ pub mod module {
 		#[pallet::weight(T::WeightInfo::redeem_funds())]
 		pub fn redeem_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
 			let user = ensure_signed(origin)?;
-			T::RoleManager::ensure_role(&user, Role::Customer)?;
 			<Self as Stakable<T::AccountId, T::Balance>>::redeem_funds(&user, amount)
 		}
 		/// Auditor locked `amount` of fund from the any user's account to locked account for some

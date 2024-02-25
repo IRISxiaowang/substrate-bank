@@ -3,7 +3,7 @@
 use frame_support::{assert_ok, traits::Hooks};
 use sp_runtime::BuildStorage;
 
-use primitives::{constants::*, AccountId, Balance, Role};
+use primitives::{constants::*, AccountId, Balance, Role, DAY};
 use traits::{BasicAccounting, Stakable};
 
 #[allow(unused_imports)]
