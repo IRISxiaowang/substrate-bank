@@ -1,4 +1,4 @@
-//! # AccountRole Pallet
+//! # Roles Pallet
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -31,6 +31,8 @@ pub mod module {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
+
+		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 	}
 
 	#[pallet::error]
@@ -77,18 +79,18 @@ pub mod module {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Register a role for a user.
+		/// Register a customer role for a user.
 		///
-		/// This function allows a user to be registered with a specific role.
+		/// This function allows a user to be registered with a customer role only.
 		/// The user must be signed and authenticated.
 		///
 		/// Params:
 		/// - `role`: The role to assign to the user.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::register())]
-		pub fn register(origin: OriginFor<T>, role: Role) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::register_customer())]
+		pub fn register_customer(origin: OriginFor<T>) -> DispatchResult {
 			let id = ensure_signed(origin)?;
-			Self::register_role(&id, role)
+			Self::register_role(&id, Role::Customer)
 		}
 
 		/// Unregister a role for a user.
@@ -100,6 +102,20 @@ pub mod module {
 		pub fn unregister(origin: OriginFor<T>) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			Self::unregister_role(&id)
+		}
+
+		/// Register any role for a user through Governance.
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::register_role_governance())]
+		pub fn register_role_governance(
+			origin: OriginFor<T>,
+			id: T::AccountId,
+			role: Role,
+		) -> DispatchResult {
+			// ensure governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			Self::register_role(&id, role)
 		}
 	}
 }

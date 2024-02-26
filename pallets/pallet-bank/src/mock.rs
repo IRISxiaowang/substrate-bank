@@ -82,6 +82,7 @@ impl Config for Runtime {
 impl pallet_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
+	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 }
 
 construct_runtime!(

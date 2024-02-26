@@ -236,6 +236,7 @@ impl pallet_bank::Config for Runtime {
 impl pallet_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_roles::weights::SubstrateWeight<Runtime>;
+	type EnsureGovernance = pallet_governance::EnsureGovernance;
 }
 
 parameter_types! {

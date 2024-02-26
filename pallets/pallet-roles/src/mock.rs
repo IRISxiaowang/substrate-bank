@@ -8,12 +8,13 @@ use frame_support::{
 
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
-use crate as pallet_account_role;
+use crate as pallet_roles;
 
 pub type AccountId = u32;
 
 pub const ALICE: AccountId = 1;
 pub const BOB: AccountId = 2;
+pub const CHARLIE: AccountId = 3;
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
@@ -47,6 +48,7 @@ parameter_types! {}
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
+	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -55,7 +57,7 @@ construct_runtime!(
 	pub enum Runtime
 	{
 		System: frame_system,
-		AccountRole: pallet_account_role,
+		Roles: pallet_roles,
 	}
 );
 
@@ -71,7 +73,7 @@ impl MockGenesisConfig {
 	pub fn build(self) -> sp_io::TestExternalities {
 		let config = RuntimeGenesisConfig {
 			system: frame_system::GenesisConfig::default(),
-			account_role: crate::GenesisConfig { roles: self.roles },
+			roles: crate::GenesisConfig { roles: self.roles },
 		};
 
 		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
