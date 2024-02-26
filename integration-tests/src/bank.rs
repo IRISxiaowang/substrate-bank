@@ -38,8 +38,6 @@ fn can_set_and_accrue_interest_rate() {
 		let staked_3 = staked_2 + interest_2;
 		let interest_3 = pallet_bank::InterestRate::<Runtime>::get() / 365u128 * staked_3;
 		assert_staked(Alice.account(), staked_3 + interest_3);
-
-		println!("{}", Gov0);
 	});
 }
 

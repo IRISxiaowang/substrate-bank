@@ -47,15 +47,18 @@ macro_rules! test_account {
 	};
 }
 
+// Customers
 test_account!(Alice, [0x00; 32]);
 test_account!(Bob, [0x01; 32]);
 test_account!(Charlie, [0x02; 32]);
 test_account!(Dave, [0x03; 32]);
 test_account!(Eve, [0x04; 32]);
 
+// Bank manager + auditor
 test_account!(Manager, [0xFF; 32]);
 test_account!(Auditor, [0xFE; 32]);
 
+// Default governance members
 test_account!(Gov0, [0xF0; 32]);
 test_account!(Gov1, [0xF1; 32]);
 test_account!(Gov2, [0xF2; 32]);
