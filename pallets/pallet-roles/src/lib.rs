@@ -87,8 +87,8 @@ pub mod module {
 		/// Params:
 		/// - `role`: The role to assign to the user.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::register())]
-		pub fn register(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::register_customer())]
+		pub fn register_customer(origin: OriginFor<T>) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			Self::register_role(&id, Role::Customer)
 		}
@@ -104,10 +104,7 @@ pub mod module {
 			Self::unregister_role(&id)
 		}
 
-		/// Governance register a role for a user.
-		///
-		/// This function allows a user to be registered with a specific role.
-		/// The user must be signed and authenticated.
+		/// Register any role for a user through Governance.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::register_role_governance())]
 		pub fn register_role_governance(

@@ -16,7 +16,7 @@ fn can_register_role() {
 		assert_eq!(None, AccountRoles::<Runtime>::get(ALICE));
 
 		// Register Alice with the role
-		assert_ok!(Roles::register(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Roles::register_customer(RuntimeOrigin::signed(ALICE)));
 
 		// Check that the event was emitted
 		assert_eq!(
@@ -34,12 +34,12 @@ fn cannot_reregister_role() {
 	default_test_ext().execute_with(|| {
 		let role = Role::Customer;
 		// Register Alice with the role
-		assert_ok!(Roles::register(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Roles::register_customer(RuntimeOrigin::signed(ALICE)));
 		System::reset_events();
 
 		// Try to register again
 		assert_noop!(
-			Roles::register(RuntimeOrigin::signed(ALICE)),
+			Roles::register_customer(RuntimeOrigin::signed(ALICE)),
 			Error::<Runtime>::AccountAlreadyRegistered
 		);
 		assert_eq!(Roles::role(&ALICE), Some(role));
@@ -51,7 +51,7 @@ fn cannot_reregister_role() {
 fn can_unregister_role() {
 	default_test_ext().execute_with(|| {
 		let role = Role::Customer;
-		assert_ok!(Roles::register(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Roles::register_customer(RuntimeOrigin::signed(ALICE)));
 		assert_eq!(Roles::role(&ALICE), Some(role));
 		System::reset_events();
 

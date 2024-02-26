@@ -11,11 +11,11 @@ mod benchmarks {
 	use super::*;
 
 	#[benchmark]
-	fn register() {
+	fn register_customer() {
 		let caller: T::AccountId = whitelisted_caller();
 
 		#[extrinsic_call]
-		register(RawOrigin::Signed(caller.clone()));
+		register_customer(RawOrigin::Signed(caller.clone()));
 
 		// Verify
 		assert_eq!(Pallet::<T>::role(&caller), Some(Role::Customer));
@@ -23,7 +23,7 @@ mod benchmarks {
 	#[benchmark]
 	fn unregister() {
 		let caller: T::AccountId = whitelisted_caller();
-		assert_ok!(Pallet::<T>::register(RawOrigin::Signed(caller.clone()).into()));
+		assert_ok!(Pallet::<T>::register_customer(RawOrigin::Signed(caller.clone()).into()));
 
 		#[extrinsic_call]
 		unregister(RawOrigin::Signed(caller.clone()));
