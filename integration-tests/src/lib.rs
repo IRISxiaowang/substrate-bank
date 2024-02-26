@@ -16,21 +16,49 @@ mod bank;
 
 pub const INITIAL_BALANCE: Balance = 1_000_000 * DOLLAR;
 
-pub const MANAGER: [u8; 32] = [0xFF; 32];
-pub const AUDITOR: [u8; 32] = [0xFE; 32];
-pub const ALICE: [u8; 32] = [0x00; 32];
-pub const BOB: [u8; 32] = [0x01; 32];
-pub const CHARLIE: [u8; 32] = [0x02; 32];
-pub const DAVE: [u8; 32] = [0x03; 32];
-pub const EVE: [u8; 32] = [0x04; 32];
+macro_rules! test_account {
+	($name:ident, $id:expr) => {
+		pub struct $name;
 
-pub const GOV_0: [u8; 32] = [0xF0; 32];
-pub const GOV_1: [u8; 32] = [0xF1; 32];
-pub const GOV_2: [u8; 32] = [0xF2; 32];
+		impl $name {
+			pub fn account(&self) -> AccountId {
+				$id.into()
+			}
 
-// TODO: use macro to convert these [] into AccountIds.
-// i.e. alice() will return AccountId([0x00; 32]);
-// Issue #52
+			pub fn sign(&self) -> RuntimeOrigin {
+				RuntimeOrigin::signed(self.account())
+			}
+		}
+
+		impl std::fmt::Display for $name {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				// Convert the array of bytes to a hexadecimal string
+				fn hex_encode(bytes: [u8; 32]) -> String {
+					let mut result = String::new();
+					for byte in bytes.iter() {
+						result.push_str(&format!("{:02x}", byte));
+					}
+					result
+				}
+				let hex_string = format!("0x{:0>64}", hex_encode($id));
+				write!(f, "{}: {:?}", stringify!($name), hex_string)
+			}
+		}
+	};
+}
+
+test_account!(Alice, [0x00; 32]);
+test_account!(Bob, [0x01; 32]);
+test_account!(Charlie, [0x02; 32]);
+test_account!(Dave, [0x03; 32]);
+test_account!(Eve, [0x04; 32]);
+
+test_account!(Manager, [0xFF; 32]);
+test_account!(Auditor, [0xFE; 32]);
+
+test_account!(Gov0, [0xF0; 32]);
+test_account!(Gov1, [0xF1; 32]);
+test_account!(Gov2, [0xF2; 32]);
 
 pub struct ExtBuilder {
 	governance_members: Vec<AccountId>,
@@ -41,22 +69,22 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			governance_members: vec![GOV_0.into(), GOV_1.into(), GOV_2.into()],
+			governance_members: vec![Gov0.account(), Gov1.account(), Gov2.account()],
 			balances: vec![
-				(ALICE.into(), INITIAL_BALANCE),
-				(BOB.into(), INITIAL_BALANCE),
-				(CHARLIE.into(), INITIAL_BALANCE),
-				(DAVE.into(), INITIAL_BALANCE),
-				(EVE.into(), INITIAL_BALANCE),
+				(Alice.account(), INITIAL_BALANCE),
+				(Bob.account(), INITIAL_BALANCE),
+				(Charlie.account(), INITIAL_BALANCE),
+				(Dave.account(), INITIAL_BALANCE),
+				(Eve.account(), INITIAL_BALANCE),
 			],
 			roles: vec![
-				(MANAGER.into(), Role::Manager),
-				(AUDITOR.into(), Role::Auditor),
-				(ALICE.into(), Role::Customer),
-				(BOB.into(), Role::Customer),
-				(CHARLIE.into(), Role::Customer),
-				(DAVE.into(), Role::Customer),
-				(EVE.into(), Role::Customer),
+				(Manager.account(), Role::Manager),
+				(Auditor.account(), Role::Auditor),
+				(Alice.account(), Role::Customer),
+				(Bob.account(), Role::Customer),
+				(Charlie.account(), Role::Customer),
+				(Dave.account(), Role::Customer),
+				(Eve.account(), Role::Customer),
 			],
 		}
 	}
