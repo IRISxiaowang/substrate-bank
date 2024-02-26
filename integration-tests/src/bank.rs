@@ -42,3 +42,17 @@ fn can_set_and_accrue_interest_rate() {
 		println!("{}", Gov0);
 	});
 }
+
+#[test]
+fn can_print_test_accounts() {
+	ExtBuilder::default().build().execute_with(|| {
+		assert_eq!(
+			Gov0.to_string(),
+			"Gov0: 0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
+		);
+		assert_eq!(
+			Alice.to_string(),
+			"Alice: 0x0000000000000000000000000000000000000000000000000000000000000000"
+		);
+	});
+}

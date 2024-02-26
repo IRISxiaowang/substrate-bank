@@ -28,20 +28,20 @@ macro_rules! test_account {
 			pub fn sign(&self) -> RuntimeOrigin {
 				RuntimeOrigin::signed(self.account())
 			}
+
+			pub fn to_string(&self) -> String {
+				format!(
+					"{}: 0x{}",
+					stringify!($name),
+					$id.iter().map(|byte| { format!("{:02x}", byte) }).collect::<String>()
+				)
+			}
 		}
 
 		impl std::fmt::Display for $name {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				// Convert the array of bytes to a hexadecimal string
-				fn hex_encode(bytes: [u8; 32]) -> String {
-					let mut result = String::new();
-					for byte in bytes.iter() {
-						result.push_str(&format!("{:02x}", byte));
-					}
-					result
-				}
-				let hex_string = format!("0x{:0>64}", hex_encode($id));
-				write!(f, "{}: {:?}", stringify!($name), hex_string)
+				write!(f, "{}", self.to_string())
 			}
 		}
 	};
