@@ -16,9 +16,13 @@ mod benchmarks {
 	fn set_prize_split() {
 		let split =
 			vec![Percent::from_percent(50), Percent::from_percent(30), Percent::from_percent(20)];
+		let call = Call::<T>::set_prize_split { prize_split: split.clone() };
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
-		#[extrinsic_call]
-		set_prize_split(RawOrigin::Root, split.clone());
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
 
 		// Verify
 		assert_eq!(PrizeSplit::<T>::get(), split);

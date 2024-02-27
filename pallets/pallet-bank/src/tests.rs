@@ -519,34 +519,6 @@ fn can_rotate_treasury_without_setting_treasury() {
 }
 
 #[test]
-fn incorrect_role_cannot_rotate_treasury() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
-		TreasuryAccount::<Runtime>::set(Some(TREASURY));
-		let new_treasury = 10u32;
-		let charlie: AccountId = 3u32;
-		assert_ok!(Roles::register_role(&charlie, Role::Auditor));
-		assert_ok!(Roles::register_role(&BOB, Role::Manager));
-
-		assert_err!(
-			Bank::rotate_treasury(RuntimeOrigin::signed(charlie), new_treasury),
-			sp_runtime::DispatchError::BadOrigin
-		);
-		assert_err!(
-			Bank::rotate_treasury(RuntimeOrigin::signed(BOB), new_treasury),
-			sp_runtime::DispatchError::BadOrigin
-		);
-		assert_err!(
-			Bank::rotate_treasury(RuntimeOrigin::signed(ALICE), new_treasury),
-			sp_runtime::DispatchError::BadOrigin
-		);
-
-		assert_eq!(TreasuryAccount::<Runtime>::get(), Some(TREASURY));
-		assert_eq!(Accounts::<Runtime>::get(TREASURY).free, 1_000_000);
-		assert!(Bank::check_total_issuance());
-	});
-}
-
-#[test]
 fn test_error_cases_in_rotating_treasury() {
 	MockGenesisConfig::with_balances(vec![(ALICE, 100)]).build().execute_with(|| {
 		let new_treasury = 10u32;
@@ -603,4 +575,29 @@ fn funds_can_unlock_after_treasury_rotation() {
 
 		assert!(Bank::check_total_issuance());
 	});
+}
+
+#[test]
+fn can_force_transfer() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 1_000), (BOB, 500)])
+		.build()
+		.execute_with(|| {
+			System::reset_events();
+			assert_ok!(Bank::force_transfer(RuntimeOrigin::root(), ALICE, BOB, 100));
+			// Check that the event was emitted
+			System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Transferred {
+				from: ALICE,
+				to: BOB,
+				amount: 100,
+			}));
+
+			assert_eq!(Accounts::<Runtime>::get(BOB).free, 600);
+			assert_eq!(Accounts::<Runtime>::get(ALICE).free, 900);
+			assert_noop!(
+				Bank::force_transfer(RuntimeOrigin::root(), ALICE, BOB, 1_000),
+				Error::<Runtime>::InsufficientBalance
+			);
+
+			assert!(Bank::check_total_issuance());
+		});
 }

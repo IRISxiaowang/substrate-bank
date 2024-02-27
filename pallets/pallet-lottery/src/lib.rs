@@ -151,11 +151,12 @@ pub mod module {
 	impl<T: Config> Pallet<T> {
 		/// Set the prize split.
 		///
-		/// Require root
+		/// Require governance approved.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_prize_split())]
 		pub fn set_prize_split(origin: OriginFor<T>, prize_split: Vec<Percent>) -> DispatchResult {
-			ensure_root(origin)?;
+			// ensure governance
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			// Ensure the total of Percents adds up to Percent::one()
 			ensure!(Self::check_split_valid(&prize_split), Error::<T>::InvalidPrizeSplitTotal);

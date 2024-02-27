@@ -110,6 +110,7 @@ impl pallet_bank::Config for Runtime {
 	type Balance = Balance;
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
+	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type ExistentialDeposit = ExistentialDeposit;
 	type MinimumAmount = MinimumAmount;
 	type RedeemPeriod = RedeemPeriod;
