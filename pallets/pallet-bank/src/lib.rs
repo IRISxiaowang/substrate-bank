@@ -93,6 +93,8 @@ pub mod module {
 
 		type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
 
+		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
+
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
 
@@ -435,11 +437,13 @@ pub mod module {
 
 		/// Migrate the old treasury account to a new one.
 		///
-		/// Requires Root.
+		/// Requires governance approved.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::rotate_treasury())]
 		pub fn rotate_treasury(origin: OriginFor<T>, new_treasury: T::AccountId) -> DispatchResult {
-			ensure_root(origin)?;
+			// ensure governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+
 			ensure!(!Accounts::<T>::contains_key(&new_treasury), Error::<T>::AccountIdAlreadyTaken);
 			ensure!(
 				T::RoleManager::role(&new_treasury).is_none(),
@@ -468,6 +472,23 @@ pub mod module {
 				new: new_treasury,
 			});
 			Ok(())
+		}
+
+		/// Force transfer `amount` of fund from one user to another user.
+		/// Requires governance approved.
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::force_transfer())]
+		pub fn force_transfer(
+			origin: OriginFor<T>,
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: T::Balance,
+		) -> DispatchResult {
+			// ensure governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+			T::RoleManager::ensure_role(&from, Role::Customer)?;
+			T::RoleManager::ensure_role(&to, Role::Customer)?;
+			<Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(&from, &to, amount)
 		}
 	}
 }

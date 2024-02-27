@@ -3,7 +3,7 @@
 use super::*;
 
 use frame_benchmarking::v2::*;
-use frame_support::assert_ok;
+use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 use frame_system::RawOrigin;
 use primitives::DOLLAR;
 #[benchmarks]
@@ -180,13 +180,41 @@ mod benchmarks {
 	#[benchmark]
 	fn rotate_treasury() {
 		let treasury = account("treasury", 0u32, 0u32);
-		let new_treasury: T::AccountId = account("new_treasury", 0u32, 0u32);
+		let new_treasury: T::AccountId = account("new", 0u32, 0u32);
 		TreasuryAccount::<T>::set(Some(treasury));
-		#[extrinsic_call]
-		rotate_treasury(RawOrigin::Root, new_treasury.clone());
+		let call = Call::<T>::rotate_treasury { new_treasury: new_treasury.clone() };
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
 
 		// Verify
 		assert_eq!(TreasuryAccount::<T>::get(), Some(new_treasury));
+	}
+
+	#[benchmark]
+	fn force_transfer() {
+		let accounts = setup::<T>();
+		let amount = (DOLLAR * 5).into();
+		let initial_balance_1 = Accounts::<T>::get(&accounts.customer_1).free;
+		let initial_balance_2 = Accounts::<T>::get(&accounts.customer_2).free;
+		let call = Call::<T>::force_transfer {
+			from: accounts.customer_1.clone(),
+			to: accounts.customer_2.clone(),
+			amount,
+		};
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+
+		// Verify
+		assert_eq!(Accounts::<T>::get(&accounts.customer_1).free, initial_balance_1 - amount);
+		assert_eq!(Accounts::<T>::get(&accounts.customer_2).free, initial_balance_2 + amount);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::default_test_ext(), crate::mock::Runtime);
