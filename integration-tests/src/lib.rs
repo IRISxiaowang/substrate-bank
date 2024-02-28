@@ -68,6 +68,9 @@ test_account!(Gov2, [0xF2; 32]);
 // Default treasury account
 test_account!(Treasury, [0xE0; 32]);
 
+// PrizePoolAccount which is from Runtime
+test_account!(PrizePool, [0xFF; 32]);
+
 pub struct ExtBuilder {
 	governance_members: Vec<AccountId>,
 	balances: Vec<(AccountId, Balance)>,
