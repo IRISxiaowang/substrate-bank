@@ -1,20 +1,22 @@
 #![cfg(test)]
 
 use frame_support::{assert_ok, traits::Hooks};
-use sp_runtime::BuildStorage;
+use sp_runtime::{BuildStorage, Percent};
 
 use primitives::{constants::*, AccountId, Balance, Role, DAY};
 use traits::{BasicAccounting, Stakable};
 
 #[allow(unused_imports)]
 use xy_chain_runtime::{
-	Bank, Governance, Lottery, Roles, Runtime, RuntimeError, RuntimeEvent, RuntimeOrigin, System,
-	Timestamp,
+	Bank, Governance, Lottery, Roles, Runtime, RuntimeCall, RuntimeError, RuntimeEvent,
+	RuntimeOrigin, System, Timestamp,
 };
 
 mod bank;
+mod lottery;
 
 pub const INITIAL_BALANCE: Balance = 1_000_000 * DOLLAR;
+pub const TICKETPRICE: Balance = DOLLAR;
 
 macro_rules! test_account {
 	($name:ident, $id:expr) => {
@@ -55,13 +57,16 @@ test_account!(Dave, [0x03; 32]);
 test_account!(Eve, [0x04; 32]);
 
 // Bank manager + auditor
-test_account!(Manager, [0xFF; 32]);
-test_account!(Auditor, [0xFE; 32]);
+test_account!(Manager, [0xFA; 32]);
+test_account!(Auditor, [0xFB; 32]);
 
 // Default governance members
 test_account!(Gov0, [0xF0; 32]);
 test_account!(Gov1, [0xF1; 32]);
 test_account!(Gov2, [0xF2; 32]);
+
+// Default treasury account
+test_account!(Treasury, [0xE0; 32]);
 
 pub struct ExtBuilder {
 	governance_members: Vec<AccountId>,
@@ -135,6 +140,8 @@ impl ExtBuilder {
 
 		ext.execute_with(|| {
 			System::set_block_number(1);
+			pallet_bank::TreasuryAccount::<Runtime>::set(Some(Treasury.account()));
+			assert_ok!(Lottery::update_ticket_price(Manager.sign(), DOLLAR));
 		});
 
 		ext
