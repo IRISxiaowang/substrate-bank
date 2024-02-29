@@ -1,6 +1,22 @@
 use core::panic;
 
+use primitives::ProposalId;
+
 use crate::*;
+
+fn dispatch_governance_call(call: Box<RuntimeCall>, proposal: ProposalId) {
+	let mut gov_iter = Governance::authorities().into_iter();
+	assert_ok!(Governance::initiate_proposal(
+		RuntimeOrigin::signed(gov_iter.next().unwrap()),
+		call
+	));
+
+	gov_iter.for_each(|member| {
+		assert_ok!(Governance::vote(RuntimeOrigin::signed(member), proposal, true));
+	});
+
+	Governance::on_finalize(System::block_number());
+}
 
 #[test]
 fn can_set_and_accrue_lottery_prize_split() {
@@ -37,7 +53,6 @@ fn can_set_and_accrue_lottery_prize_split() {
 			tax,
 		}) = System::events().into_iter().last().unwrap().event
 		{
-			println!("{:?} won. Amount: {}, tax: {}", user, won_fund, tax);
 			assert_balance(user, INITIAL_BALANCE - 40 * DOLLAR + won_fund);
 			assert_balance(Treasury.account(), tax);
 			assert_balance(PrizePool.account(), 0);
@@ -50,13 +65,13 @@ fn can_set_and_accrue_lottery_prize_split() {
 		let call = Box::new(RuntimeCall::Lottery(pallet_lottery::Call::set_prize_split {
 			prize_split: prize_split.clone(),
 		}));
-		assert_ok!(Governance::initiate_proposal(Gov0.sign(), call));
-		assert_ok!(Governance::vote(Gov1.sign(), 1, true));
-		assert_ok!(Governance::vote(Gov2.sign(), 1, true));
 
-		Governance::on_finalize(System::block_number());
+		dispatch_governance_call(call, 1);
 
 		assert_eq!(Lottery::prize_split(), prize_split.clone());
+
+		// Reset events
+		System::reset_events();
 
 		// Second round lottery with new prize split.
 		assert_ok!(Lottery::buy_ticket(Alice.sign(), 10));
@@ -133,11 +148,8 @@ fn can_draw_lottery_without_enough_winners() {
 		let call = Box::new(RuntimeCall::Lottery(pallet_lottery::Call::set_prize_split {
 			prize_split: prize_split.clone(),
 		}));
-		assert_ok!(Governance::initiate_proposal(Gov0.sign(), call));
-		assert_ok!(Governance::vote(Gov1.sign(), 1, true));
-		assert_ok!(Governance::vote(Gov2.sign(), 1, true));
 
-		Governance::on_finalize(System::block_number());
+		dispatch_governance_call(call, 1);
 
 		assert_eq!(Lottery::prize_split(), prize_split.clone());
 
@@ -164,6 +176,9 @@ fn can_draw_lottery_without_enough_winners() {
 			},
 		));
 
+		// Reset events
+		System::reset_events();
+
 		// Test the second round if the winner is enough, then all the fund from prize pool will
 		// draw to the winners.
 		assert_ok!(Lottery::buy_ticket(Bob.sign(), 50));
@@ -183,7 +198,7 @@ fn can_draw_lottery_without_enough_winners() {
 		// Check the treasury account received the tax.
 		assert_balance(Treasury.account(), tax_1 + tax + tax_2);
 
-		// Check the rest prize is stay in the prize pool account for next round lottery draw.
+		// No fund is left here.
 		assert_balance(PrizePool.account(), 0);
 
 		System::assert_has_event(RuntimeEvent::Lottery(
@@ -226,11 +241,8 @@ fn can_force_draw_lottery() {
 
 		// Governance force draw.
 		let call = Box::new(RuntimeCall::Lottery(pallet_lottery::Call::force_draw {}));
-		assert_ok!(Governance::initiate_proposal(Gov0.sign(), call));
-		assert_ok!(Governance::vote(Gov1.sign(), 1, true));
-		assert_ok!(Governance::vote(Gov2.sign(), 1, true));
 
-		Governance::on_finalize(System::block_number());
+		dispatch_governance_call(call, 1);
 
 		Lottery::on_finalize(System::block_number());
 
