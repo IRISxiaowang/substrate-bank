@@ -1,10 +1,8 @@
 use core::panic;
 
-use primitives::ProposalId;
-
 use crate::*;
 
-fn dispatch_governance_call(call: Box<RuntimeCall>, proposal: ProposalId) {
+fn dispatch_governance_call(call: Box<RuntimeCall>) {
 	let mut gov_iter = Governance::authorities().into_iter();
 	assert_ok!(Governance::initiate_proposal(
 		RuntimeOrigin::signed(gov_iter.next().unwrap()),
@@ -12,7 +10,11 @@ fn dispatch_governance_call(call: Box<RuntimeCall>, proposal: ProposalId) {
 	));
 
 	gov_iter.for_each(|member| {
-		assert_ok!(Governance::vote(RuntimeOrigin::signed(member), proposal, true));
+		assert_ok!(Governance::vote(
+			RuntimeOrigin::signed(member),
+			Governance::proposal_id(),
+			true
+		));
 	});
 
 	Governance::on_finalize(System::block_number());
@@ -66,7 +68,7 @@ fn can_set_and_accrue_lottery_prize_split() {
 			prize_split: prize_split.clone(),
 		}));
 
-		dispatch_governance_call(call, 1);
+		dispatch_governance_call(call);
 
 		assert_eq!(Lottery::prize_split(), prize_split.clone());
 
@@ -149,7 +151,7 @@ fn can_draw_lottery_without_enough_winners() {
 			prize_split: prize_split.clone(),
 		}));
 
-		dispatch_governance_call(call, 1);
+		dispatch_governance_call(call);
 
 		assert_eq!(Lottery::prize_split(), prize_split.clone());
 
@@ -242,7 +244,7 @@ fn can_force_draw_lottery() {
 		// Governance force draw.
 		let call = Box::new(RuntimeCall::Lottery(pallet_lottery::Call::force_draw {}));
 
-		dispatch_governance_call(call, 1);
+		dispatch_governance_call(call);
 
 		Lottery::on_finalize(System::block_number());
 
