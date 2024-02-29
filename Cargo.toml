@@ -15,7 +15,8 @@ members = [
 	"primitives",
 	"traits",
     "runtime",
-    "integration-tests",
+    "integration-tests", 
+    "custom-rpc",
 ]
 resolver = "2"
 [profile.release]

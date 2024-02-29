@@ -6,6 +6,7 @@ use codec::MaxEncodedLen;
 use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
 use frame_system::pallet_prelude::*;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
@@ -25,21 +26,57 @@ pub use weights::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum LockReason {
 	Stake,
 	Redeem,
 	Auditor,
 }
 
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum UnlockReason {
 	Expired,
 	Auditor,
 }
 
 /// Stores locked funds.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub struct LockedFund<Balance> {
 	pub id: LockId,
 	pub amount: Balance,
@@ -47,7 +84,19 @@ pub struct LockedFund<Balance> {
 }
 
 /// balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Clone,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub struct AccountData<Balance> {
 	pub free: Balance,
 	pub reserved: Balance,
