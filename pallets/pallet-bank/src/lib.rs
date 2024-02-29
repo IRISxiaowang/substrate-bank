@@ -302,6 +302,10 @@ pub mod module {
 		) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			T::RoleManager::ensure_role(&id, Role::Manager)?;
+
+			if amount < T::MinimumAmount::get() {
+				return Err(Error::<T>::AmountTooSmall.into());
+			}
 			<Self as BasicAccounting<T::AccountId, T::Balance>>::deposit(&user, amount)
 		}
 
@@ -317,6 +321,10 @@ pub mod module {
 		) -> DispatchResult {
 			let id = ensure_signed(origin)?;
 			T::RoleManager::ensure_role(&id, Role::Manager)?;
+
+			if amount < T::MinimumAmount::get() {
+				return Err(Error::<T>::AmountTooSmall.into());
+			}
 			<Self as BasicAccounting<T::AccountId, T::Balance>>::withdraw(&user, amount)
 		}
 
@@ -331,6 +339,10 @@ pub mod module {
 			let id = ensure_signed(origin)?;
 			T::RoleManager::ensure_role(&id, Role::Customer)?;
 			T::RoleManager::ensure_role(&to_user, Role::Customer)?;
+
+			if amount < T::MinimumAmount::get() {
+				return Err(Error::<T>::AmountTooSmall.into());
+			}
 			<Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(&id, &to_user, amount)
 		}
 
@@ -495,27 +507,18 @@ pub mod module {
 
 impl<T: Config> BasicAccounting<T::AccountId, T::Balance> for Pallet<T> {
 	fn deposit(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		if amount < T::MinimumAmount::get() {
-			return Err(Error::<T>::AmountTooSmall.into());
-		}
 		Self::mint(user, amount)?;
 		Self::deposit_event(Event::<T>::Deposited { user: user.clone(), amount });
 		Ok(())
 	}
 
 	fn withdraw(user: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		if amount < T::MinimumAmount::get() {
-			return Err(Error::<T>::AmountTooSmall.into());
-		}
 		Self::burn(user, amount)?;
 		Self::deposit_event(Event::<T>::Withdrew { user: user.clone(), amount });
 		Ok(())
 	}
 
 	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> DispatchResult {
-		if amount < T::MinimumAmount::get() {
-			return Err(Error::<T>::AmountTooSmall.into());
-		}
 		Accounts::<T>::mutate(from, |balance| -> DispatchResult {
 			if balance.free >= amount {
 				balance.free -= amount;
