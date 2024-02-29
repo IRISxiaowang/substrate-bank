@@ -168,6 +168,7 @@ pub mod module {
 
 	/// Stores the next Proposal ID should be.
 	#[pallet::storage]
+	#[pallet::getter(fn proposal_id)]
 	pub type NextProposalId<T: Config> = StorageValue<_, ProposalId, ValueQuery>;
 
 	/// Use the increased proposalId, stores the encoded extrinsic call.
