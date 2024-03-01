@@ -361,14 +361,13 @@ impl_runtime_apis! {
 		fn account_data(who: AccountId) -> pallet_bank::AccountData<Balance> {
 			Bank::accounts(who)
 		}
-		/// Calculate and returns the actual APY for an account in BPS format
-		/// (with accumulated compounding interest)
-		fn apy_in_bps(_who: AccountId) -> u32 {
-			1_234u32
+		/// Calculate and returns the actual interest return per annum.
+		fn interest_pa(who: AccountId) -> Balance {
+			Bank::interest_pa(who)
 		}
 		/// Returns when a locked fund is released.
-		fn fund_unlock_at(_who: AccountId, _lock_id: LockId) -> BlockNumber {
-			Default::default()
+		fn fund_unlock_at(who: AccountId, lock_id: LockId) -> BlockNumber {
+			Bank::fund_unlock_at(who, lock_id)
 		}
 	}
 

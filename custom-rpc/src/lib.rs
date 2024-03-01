@@ -53,9 +53,9 @@ pub trait CustomRpcApi {
 	/// Returns the full Account Data of a user.
 	#[method(name = "account_data")]
 	fn rpc_account_data(&self, who: AccountId, at: Option<Hash>) -> RpcResult<RpcAccountData>;
-	/// Returns the actual APY for an account (in BPS)
-	#[method(name = "apy_in_bps")]
-	fn rpc_apy_in_bps(&self, who: AccountId, at: Option<Hash>) -> RpcResult<u32>;
+	/// Returns the interest earned per annum.
+	#[method(name = "interest_pa")]
+	fn rpc_interest_pa(&self, who: AccountId, at: Option<Hash>) -> RpcResult<Balance>;
 }
 
 pub struct CustomRpc<C, B> {
@@ -114,10 +114,10 @@ where
 		}))
 	}
 
-	fn rpc_apy_in_bps(&self, who: AccountId, at: Option<Hash>) -> RpcResult<u32> {
+	fn rpc_interest_pa(&self, who: AccountId, at: Option<Hash>) -> RpcResult<Balance> {
 		self.client
 			.runtime_api()
-			.apy_in_bps(self.unwrap_or_best(at), who)
+			.interest_pa(self.unwrap_or_best(at), who)
 			.map_err(to_rpc_error)
 	}
 }

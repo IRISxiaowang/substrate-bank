@@ -12,6 +12,15 @@ use crate::{
 };
 use frame_support::{assert_err, assert_noop, assert_ok};
 use frame_system::RawOrigin;
+use primitives::YEAR;
+// Assert a and b are equal, within the precision limit. a/p == b / p
+fn assert_eq_with_precision<N: Eq + sp_std::ops::Div<Output = N> + Debug + std::marker::Copy>(
+	a: N,
+	b: N,
+	precision: N,
+) {
+	assert_eq!(a / precision, b / precision);
+}
 
 fn stake(user: AccountId, amount: Balance) {
 	let reserved = Bank::accounts(user).reserved;
@@ -600,4 +609,47 @@ fn can_force_transfer() {
 
 			assert!(Bank::check_total_issuance());
 		});
+}
+
+#[test]
+fn can_check_fund_unlock_at() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 1_000)]).build().execute_with(|| {
+		//
+		let unlock_block = System::block_number() + StakePeriod::get();
+		assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 100));
+
+		System::set_block_number(10);
+		let unlock_block_2 = System::block_number() + StakePeriod::get();
+		assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 200));
+
+		System::set_block_number(100);
+		let unlock_block_3 = System::block_number() + StakePeriod::get();
+		assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 300));
+
+		// Verify
+		assert_eq!(unlock_block, Bank::fund_unlock_at(ALICE, 1));
+		assert_eq!(unlock_block_2, Bank::fund_unlock_at(ALICE, 2));
+		assert_eq!(unlock_block_3, Bank::fund_unlock_at(ALICE, 3));
+	});
+}
+
+#[test]
+fn can_calculate_interest_pa() {
+	MockGenesisConfig::with_balances(vec![(ALICE, 1_000)]).build().execute_with(|| {
+		let initial_balance: Balance = 1_000_000_000_000_000_000;
+		let payout_times = YEAR / INTEREST_PAYOUT_PERIOD as u32;
+		Accounts::<Runtime>::mutate(ALICE, |account_data| account_data.reserved = initial_balance);
+
+		InterestRate::<Runtime>::set(Perbill::from_rational(10u32, 100u32));
+
+		let expect_interest = Bank::interest_pa(ALICE);
+
+		for _ in 0..payout_times {
+			Bank::on_finalize(INTEREST_PAYOUT_PERIOD);
+		}
+
+		let actual_interest = Bank::accounts(ALICE).reserved - initial_balance;
+
+		assert_eq_with_precision(expect_interest, actual_interest, 1_000_000u128);
+	});
 }

@@ -9,8 +9,8 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
-	DispatchResult, Perbill,
+	traits::{AtLeast32BitUnsigned, BlockNumberProvider, One, Saturating},
+	DispatchResult, FixedPointNumber, FixedU128, Perbill,
 };
 use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
@@ -756,5 +756,38 @@ impl<T: Config> Pallet<T> {
 				Err(Error::<T>::InvalidLockId.into())
 			}
 		})
+	}
+
+	// Return unlock block number.
+	pub fn fund_unlock_at(who: T::AccountId, lock_id: LockId) -> BlockNumberFor<T> {
+		AccountWithUnlockedFund::<T>::iter()
+			.find_map(|(block_number, accounts)| {
+				accounts.iter().find_map(|(user, locked)| {
+					if *user == who && *locked == lock_id {
+						Some(block_number)
+					} else {
+						None
+					}
+				})
+			})
+			.unwrap_or_default()
+	}
+
+	pub fn interest_pa(who: T::AccountId) -> T::Balance {
+		let initial_balance = Self::accounts(who).reserved;
+		let interest_rate_per_year = Self::interest_rate();
+		let payout_times = FixedU128::saturating_from_rational(
+			T::TotalBlocksPerYear::get(),
+			T::InterestPayoutPeriod::get(),
+		)
+		.saturating_mul_int(1usize);
+		let interest_rate_per_payout = interest_rate_per_year *
+			Perbill::from_rational(T::InterestPayoutPeriod::get(), T::TotalBlocksPerYear::get());
+
+		// Compounding interest formulae: A = P(1 + r / n) ^ n
+		let final_balance = (FixedU128::from_perbill(interest_rate_per_payout) + FixedU128::one())
+			.saturating_pow(payout_times)
+			.saturating_mul_int(initial_balance);
+		final_balance - initial_balance
 	}
 }

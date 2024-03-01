@@ -32,9 +32,8 @@ decl_runtime_apis!(
 	pub trait CustomRuntimeApi {
 		/// Returns account Data for a user
 		fn account_data(who: AccountId) -> AccountData<Balance>;
-		/// Calculate and returns the actual APY for an account in BPS format
-		/// (with accumulated compounding interest)
-		fn apy_in_bps(who: AccountId) -> u32;
+		/// Calculate and returns the actual interest return per annum.
+		fn interest_pa(who: AccountId) -> Balance;
 		/// Returns when a locked fund is released.
 		fn fund_unlock_at(who: AccountId, lock_id: LockId) -> BlockNumber;
 	}
