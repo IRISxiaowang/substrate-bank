@@ -758,29 +758,29 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	// Return unlock block number.
+	/// Return the block number the fund is unlocked at.
 	pub fn fund_unlock_at(who: T::AccountId, lock_id: LockId) -> BlockNumberFor<T> {
+		let target = (who, lock_id);
 		AccountWithUnlockedFund::<T>::iter()
-			.find_map(|(block_number, accounts)| {
-				accounts.iter().find_map(|(user, locked)| {
-					if *user == who && *locked == lock_id {
-						Some(block_number)
-					} else {
-						None
-					}
-				})
-			})
+			.find(|(_block_number, accounts)| accounts.contains(&target))
+			.map(|(block_number, _)| block_number)
 			.unwrap_or_default()
 	}
 
+	/// Estimate the year interest depending on the current staked.
 	pub fn interest_pa(who: T::AccountId) -> T::Balance {
 		let initial_balance = Self::accounts(who).reserved;
 		let interest_rate_per_year = Self::interest_rate();
+
+		// Use the total blocks per year divide the interest payout period is the payout times.
+		// Switch the type of `payout_times` to usize.
 		let payout_times = FixedU128::saturating_from_rational(
 			T::TotalBlocksPerYear::get(),
 			T::InterestPayoutPeriod::get(),
 		)
 		.saturating_mul_int(1usize);
+
+		// Calculate the interest rate per payout time
 		let interest_rate_per_payout = interest_rate_per_year *
 			Perbill::from_rational(T::InterestPayoutPeriod::get(), T::TotalBlocksPerYear::get());
 
