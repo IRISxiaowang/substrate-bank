@@ -46,8 +46,11 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 use primitives::{
-	AccountId, Balance, BlockNumber, Hash, Nonce, Signature, DAY, DOLLAR, SLOT_DURATION, YEAR,
+	AccountId, Balance, BlockNumber, Hash, LockId, Nonce, Signature, DAY, DOLLAR, SLOT_DURATION,
+	YEAR,
 };
+
+pub mod runtime_api;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -353,6 +356,21 @@ mod benches {
 }
 
 impl_runtime_apis! {
+	impl runtime_api::CustomRuntimeApi<Block> for Runtime {
+		/// Returns account Data for a user
+		fn account_data(who: AccountId) -> pallet_bank::AccountData<Balance> {
+			Bank::accounts(who)
+		}
+		/// Calculate and returns the actual interest return per annum.
+		fn interest_pa(who: AccountId) -> Balance {
+			Bank::interest_pa(who)
+		}
+		/// Returns when a locked fund is released.
+		fn fund_unlock_at(who: AccountId, lock_id: LockId) -> BlockNumber {
+			Bank::fund_unlock_at(who, lock_id)
+		}
+	}
+
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION

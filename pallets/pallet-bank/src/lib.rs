@@ -6,10 +6,11 @@ use codec::MaxEncodedLen;
 use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
 use frame_system::pallet_prelude::*;
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
-	DispatchResult, Perbill,
+	traits::{AtLeast32BitUnsigned, BlockNumberProvider, One, Saturating},
+	DispatchResult, FixedPointNumber, FixedU128, Perbill,
 };
 use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
@@ -25,21 +26,57 @@ pub use weights::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum LockReason {
 	Stake,
 	Redeem,
 	Auditor,
 }
 
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum UnlockReason {
 	Expired,
 	Auditor,
 }
 
 /// Stores locked funds.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub struct LockedFund<Balance> {
 	pub id: LockId,
 	pub amount: Balance,
@@ -47,7 +84,19 @@ pub struct LockedFund<Balance> {
 }
 
 /// balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Clone,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub struct AccountData<Balance> {
 	pub free: Balance,
 	pub reserved: Balance,
@@ -707,5 +756,38 @@ impl<T: Config> Pallet<T> {
 				Err(Error::<T>::InvalidLockId.into())
 			}
 		})
+	}
+
+	/// Return the block number the fund is unlocked at.
+	pub fn fund_unlock_at(who: T::AccountId, lock_id: LockId) -> BlockNumberFor<T> {
+		let target = (who, lock_id);
+		AccountWithUnlockedFund::<T>::iter()
+			.find(|(_block_number, accounts)| accounts.contains(&target))
+			.map(|(block_number, _)| block_number)
+			.unwrap_or_default()
+	}
+
+	/// Estimate the year interest depending on the current staked.
+	pub fn interest_pa(who: T::AccountId) -> T::Balance {
+		let initial_balance = Self::accounts(who).reserved;
+		let interest_rate_per_year = Self::interest_rate();
+
+		// Use the total blocks per year divide the interest payout period is the payout times.
+		// Switch the type of `payout_times` to usize.
+		let payout_times = FixedU128::saturating_from_rational(
+			T::TotalBlocksPerYear::get(),
+			T::InterestPayoutPeriod::get(),
+		)
+		.saturating_mul_int(1usize);
+
+		// Calculate the interest rate per payout time
+		let interest_rate_per_payout = interest_rate_per_year *
+			Perbill::from_rational(T::InterestPayoutPeriod::get(), T::TotalBlocksPerYear::get());
+
+		// Compounding interest formulae: A = P(1 + r / n) ^ n
+		let final_balance = (FixedU128::from_perbill(interest_rate_per_payout) + FixedU128::one())
+			.saturating_pow(payout_times)
+			.saturating_mul_int(initial_balance);
+		final_balance - initial_balance
 	}
 }

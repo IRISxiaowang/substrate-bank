@@ -60,6 +60,7 @@ frame-benchmarking-cli = { git = "https://github.com/paritytech/polkadot-sdk", b
 
 # Local Dependencies
 xy-chain-runtime = { path = "../runtime" }
+custom-rpc = { path = "../custom-rpc" }
 
 # CLI-specific dependencies
 primitives = { path = "../primitives" }
