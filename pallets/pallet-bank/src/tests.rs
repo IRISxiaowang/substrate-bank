@@ -606,28 +606,45 @@ fn can_force_transfer() {
 
 #[test]
 fn can_check_fund_unlock_at() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000)]).build().execute_with(|| {
-		// Check if it works with stake function.
-		let unlock_block = System::block_number() + StakePeriod::get();
-		assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 100));
+	MockGenesisConfig::with_balances(vec![(ALICE, 1_000), (BOB, 1_000)])
+		.build()
+		.execute_with(|| {
+			// Check if it works with stake function.
+			let unlock_block = System::block_number() + StakePeriod::get();
+			assert_ok!(Bank::stake_funds(RuntimeOrigin::signed(ALICE), 100));
 
-		// Verify
-		assert_eq!(unlock_block, Bank::fund_unlock_at(ALICE, 1));
+			// Verify
+			assert_eq!(unlock_block, Bank::fund_unlock_at(ALICE, 1));
 
-		// Check it works with `AccountWithUnlockedFund` stores with multiple lock id.
-		AccountWithUnlockedFund::<Runtime>::insert(10, vec![(ALICE, 2), (ALICE, 5), (ALICE, 6)]);
-		AccountWithUnlockedFund::<Runtime>::insert(20, vec![(ALICE, 3), (ALICE, 4)]);
+			// Check it works with `AccountWithUnlockedFund` stores with multiple lock id.
+			let charlie: AccountId = 3u32;
+			AccountWithUnlockedFund::<Runtime>::insert(
+				10,
+				vec![(ALICE, 2), (BOB, 3), (charlie, 4), (ALICE, 5), (ALICE, 6)],
+			);
+			AccountWithUnlockedFund::<Runtime>::insert(
+				20,
+				vec![(ALICE, 7), (charlie, 8), (BOB, 9), (ALICE, 10)],
+			);
 
-		// Verify
-		System::set_block_number(10);
-		assert_eq!(10, Bank::fund_unlock_at(ALICE, 2));
-		assert_eq!(10, Bank::fund_unlock_at(ALICE, 5));
-		assert_eq!(10, Bank::fund_unlock_at(ALICE, 6));
+			// Verify
+			assert_eq!(10, Bank::fund_unlock_at(ALICE, 2));
+			assert_eq!(10, Bank::fund_unlock_at(BOB, 3));
+			assert_eq!(10, Bank::fund_unlock_at(charlie, 4));
+			assert_eq!(10, Bank::fund_unlock_at(ALICE, 5));
+			assert_eq!(10, Bank::fund_unlock_at(ALICE, 6));
 
-		System::set_block_number(20);
-		assert_eq!(20, Bank::fund_unlock_at(ALICE, 3));
-		assert_eq!(20, Bank::fund_unlock_at(ALICE, 4));
-	});
+			assert_eq!(20, Bank::fund_unlock_at(ALICE, 7));
+			assert_eq!(20, Bank::fund_unlock_at(charlie, 8));
+			assert_eq!(20, Bank::fund_unlock_at(BOB, 9));
+			assert_eq!(20, Bank::fund_unlock_at(ALICE, 10));
+
+			// Verify that if lock id is not exist, the function `fund_unlock_at` will return 0.
+			assert_eq!(0, Bank::fund_unlock_at(ALICE, 8));
+			assert_eq!(0, Bank::fund_unlock_at(charlie, 9));
+			assert_eq!(0, Bank::fund_unlock_at(BOB, 10));
+			assert_eq!(0, Bank::fund_unlock_at(4u32, 10));
+		});
 }
 
 #[test]
@@ -647,8 +664,8 @@ fn can_calculate_interest_pa() {
 	});
 }
 
-// Test interest can be received per year by using Alice account with different interest rate and
-// staked balance.
+/// Test interest can be received per year by using Alice account with different interest rate and
+/// staked balance.
 fn calculate_interest_pa_with_interest_rate(initial_balance: Balance, interest_rate_bps: u32) {
 	let payout_times = YEAR / INTEREST_PAYOUT_PERIOD as u32;
 	let interest_rate = Perbill::from_rational(interest_rate_bps, 10_000u32);
@@ -669,7 +686,7 @@ fn calculate_interest_pa_with_interest_rate(initial_balance: Balance, interest_r
 	assert_eq_with_precision(expect_interest, actual_interest, 1_000_000u128);
 }
 
-// Assert a and b are equal, within the precision limit. a/p == b / p
+/// Assert a and b are equal, within the precision limit. a/p == b / p
 fn assert_eq_with_precision<N: Eq + sp_std::ops::Div<Output = N> + Debug + std::marker::Copy>(
 	a: N,
 	b: N,
