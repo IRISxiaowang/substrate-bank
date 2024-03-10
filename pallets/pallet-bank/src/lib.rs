@@ -248,12 +248,13 @@ pub mod module {
 
 	/// Stores the treasury account.
 	#[pallet::storage]
+	#[pallet::getter(fn treasury_account)]
 	pub type TreasuryAccount<T: Config> = StorageValue<_, T::AccountId>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		pub balances: Vec<(T::AccountId, T::Balance)>,
+		pub balances: Vec<(T::AccountId, T::Balance, T::Balance)>,
 	}
 
 	#[pallet::genesis_build]
@@ -262,16 +263,17 @@ pub mod module {
 			let total: T::Balance = self
 				.balances
 				.iter()
-				.map(|(account_id, initial_balance)| {
+				.map(|(account_id, initial_free, initial_reserved)| {
 					assert!(
-                    	*initial_balance >= T::ExistentialDeposit::get(),
+                    	*initial_free + *initial_reserved >= T::ExistentialDeposit::get(),
                     	"the balance of any account should always be more than existential deposit.",
                     );
 					let _ = T::RoleManager::register_role(account_id, Role::Customer);
 					Accounts::<T>::mutate(account_id, |account_data| {
-						account_data.free = *initial_balance
+						account_data.free = *initial_free;
+						account_data.reserved = *initial_reserved;
 					});
-					*initial_balance
+					*initial_free + *initial_reserved
 				})
 				.sum();
 			TotalIssuance::<T>::set(total);

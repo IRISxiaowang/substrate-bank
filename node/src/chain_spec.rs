@@ -97,7 +97,7 @@ fn testnet_genesis(
 				.iter()
 				.filter_map(|acc| {
 					if acc.1 == Role::Customer {
-						Some((acc.0.clone(), 1_000_000_000_000_000_000u128))
+						Some((acc.0.clone(), 1_000_000_000_000_000_000u128, 1_000_000_000_000_000_000u128))
 					} else {
 						None
 					}

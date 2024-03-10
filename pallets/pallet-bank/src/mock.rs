@@ -97,19 +97,19 @@ construct_runtime!(
 
 #[derive(Default)]
 pub struct MockGenesisConfig {
-	balances: Vec<(AccountId, Balance)>,
+	balances: Vec<(AccountId, Balance, Balance)>,
 }
 
 impl MockGenesisConfig {
-	pub fn with_balances(balances: Vec<(AccountId, Balance)>) -> Self {
+	pub fn with_balances(balances: Vec<(AccountId, Balance, Balance)>) -> Self {
 		Self { balances }
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
 		let mut endowed = self.balances;
-		endowed.push((TREASURY, INITIAL_BALANCE));
+		endowed.push((TREASURY, INITIAL_BALANCE, 0u128));
 
-		let roles = endowed.iter().map(|(id, _)| (*id, Role::Customer)).collect();
+		let roles = endowed.iter().map(|(id, _, _)| (*id, Role::Customer)).collect();
 		let config = RuntimeGenesisConfig {
 			system: frame_system::GenesisConfig::default(),
 			bank: crate::GenesisConfig { balances: endowed },
