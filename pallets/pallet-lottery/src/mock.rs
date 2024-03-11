@@ -153,7 +153,13 @@ impl MockGenesisConfig {
 		let config = RuntimeGenesisConfig {
 			system: Default::default(),
 			lottery: Default::default(),
-			bank: pallet_bank::GenesisConfig { balances: self.balance },
+			bank: pallet_bank::GenesisConfig {
+				balances: self
+					.balance
+					.into_iter()
+					.map(|(account, free)| (account, free, 0u128))
+					.collect::<Vec<_>>(),
+			},
 			roles: pallet_roles::GenesisConfig {
 				roles: vec![
 					(ALICE, Role::Customer),

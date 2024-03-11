@@ -73,7 +73,7 @@ test_account!(PrizePool, [0xFF; 32]);
 
 pub struct ExtBuilder {
 	governance_members: Vec<AccountId>,
-	balances: Vec<(AccountId, Balance)>,
+	balances: Vec<(AccountId, Balance, Balance)>,
 	roles: Vec<(AccountId, Role)>,
 }
 
@@ -82,11 +82,11 @@ impl Default for ExtBuilder {
 		Self {
 			governance_members: vec![Gov0.account(), Gov1.account(), Gov2.account()],
 			balances: vec![
-				(Alice.account(), INITIAL_BALANCE),
-				(Bob.account(), INITIAL_BALANCE),
-				(Charlie.account(), INITIAL_BALANCE),
-				(Dave.account(), INITIAL_BALANCE),
-				(Eve.account(), INITIAL_BALANCE),
+				(Alice.account(), INITIAL_BALANCE, 0),
+				(Bob.account(), INITIAL_BALANCE, 0),
+				(Charlie.account(), INITIAL_BALANCE, 0),
+				(Dave.account(), INITIAL_BALANCE, 0),
+				(Eve.account(), INITIAL_BALANCE, 0),
 			],
 			roles: vec![
 				(Manager.account(), Role::Manager),
@@ -107,7 +107,7 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn balances(mut self, balances: Vec<(AccountId, Balance)>) -> Self {
+	pub fn balances(mut self, balances: Vec<(AccountId, Balance, Balance)>) -> Self {
 		self.balances = balances;
 		self
 	}

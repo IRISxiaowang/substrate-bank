@@ -47,7 +47,7 @@ impl RpcAccountData {
 	}
 }
 
-#[rpc(server, client, namespace = "rpc")]
+#[rpc(server, client, namespace = "xyChain")]
 /// Custom RPC endpoints for the xy-chain
 pub trait CustomRpcApi {
 	/// Returns the full Account Data of a user.
