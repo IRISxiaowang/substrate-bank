@@ -12,6 +12,7 @@ members = [
     "pallets/pallet-bank",
     "pallets/pallet-lottery",
     "pallets/pallet-governance",
+    "pallets/pallet-nft",
 	"primitives",
 	"traits",
     "runtime",
