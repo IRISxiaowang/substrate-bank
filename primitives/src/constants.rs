@@ -24,3 +24,5 @@ pub const YEAR: BlockNumber = DAY * 365;
 pub const DOLLAR: Balance = 1_000_000_000_000u128;
 pub const CENT: Balance = 10_000_000_000u128;
 pub const MILLICENT: Balance = 10_000_000u128;
+
+pub const FILENAME_MAXSIZE: u32 = 255u32;

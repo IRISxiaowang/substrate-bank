@@ -278,6 +278,18 @@ impl pallet_governance::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type EnsureGovernance = pallet_governance::EnsureGovernance;
 }
+
+parameter_types! {
+	pub const MaxSize: u32 = 1_000u32;
+}
+
+impl pallet_nft::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type RoleManager = Roles;
+	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
+	type MaxSize = MaxSize;
+}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime {
@@ -294,6 +306,7 @@ construct_runtime!(
 		Roles: pallet_roles,
 		Lottery: pallet_lottery,
 		Governance: pallet_governance,
+		Nft: pallet_nft,
 	}
 );
 
@@ -352,6 +365,7 @@ mod benches {
 		[pallet_roles, Roles]
 		[pallet_lottery, Lottery]
 		[pallet_governance, Governance]
+		[pallet_nft, Nft]
 	);
 }
 

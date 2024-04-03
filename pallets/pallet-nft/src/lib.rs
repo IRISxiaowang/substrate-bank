@@ -2,26 +2,26 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{pallet_prelude::*, traits::BuildGenesisConfig};
+use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use sp_runtime::DispatchResult;
-use sp_std::{marker::PhantomData, prelude::*, vec::Vec};
+use sp_std::{prelude::*, vec::Vec};
 
-use primitives::{NftId, Role};
+use primitives::{NftId, Role, FILENAME_MAXSIZE};
 use traits::ManageRoles;
 
-// mod mock;
-// mod tests;
+mod mock;
+mod tests;
 
 pub mod weights;
 pub use weights::*;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 /// Stores Nft data
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct NftData<NftId> {
+pub struct NftData {
 	pub nft_id: NftId,
 	pub data: Vec<u8>,
 	pub file_name: Vec<u8>,
@@ -37,7 +37,6 @@ pub mod module {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
 
 		type RoleManager: ManageRoles<Self::AccountId>;
@@ -56,23 +55,25 @@ pub mod module {
 		IncorrectRole,
 		/// The Nft Id should exist.
 		InvalidNftId,
-		/// Tax rate must be between 0% - 100%.
-		InvalidTaxRate,
+		/// Data is too large.
+		DataTooLarge,
+		/// File name is too large.
+		FileNameTooLarge,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Created an Nft.
-		NftMinted { who: T::AccountId, nft_id: NftId },
+		NftMinted { owner: T::AccountId, nft_id: NftId },
 		/// Burnt an Nft.
-		NftBurned { who: T::AccountId, nft_id: NftId },
+		NftBurned { owner: T::AccountId, nft_id: NftId },
 		/// Transferred an Nft.
 		NftTransferred { from: T::AccountId, to: T::AccountId, nft_id: NftId },
 		/// An Nft created.
 		NFTPending { nft_id: NftId, file_name: Vec<u8> },
 		/// Auditor audited an nft pass or fail.
-		NftAudited { nft_id: NftId, result: bool },
+		NftAudited { nft_id: NftId, approve: bool },
 	}
 
 	#[pallet::storage]
@@ -82,25 +83,14 @@ pub mod module {
 	#[pallet::storage]
 	#[pallet::getter(fn pending_nft)]
 	pub type PendingNft<T: Config> =
-		StorageMap<_, Blake2_128Concat, NftId, (NftData<NftId>, T::AccountId)>;
+		StorageMap<_, Blake2_128Concat, NftId, (NftData, T::AccountId)>;
 	#[pallet::storage]
 	#[pallet::getter(fn owners)]
 	pub type Owners<T: Config> = StorageMap<_, Blake2_128Concat, NftId, T::AccountId>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn nfts)]
-	pub type Nfts<T: Config> = StorageMap<_, Blake2_128Concat, NftId, NftData<NftId>>;
-
-	#[pallet::genesis_config]
-	#[derive(frame_support::DefaultNoBound)]
-	pub struct GenesisConfig<T: Config> {
-		phantom: PhantomData<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {}
-	}
+	pub type Nfts<T: Config> = StorageMap<_, Blake2_128Concat, NftId, NftData>;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -121,6 +111,10 @@ pub mod module {
 
 			// Ensure role is not auditor.
 			ensure!(T::RoleManager::role(&id) != Some(Role::Auditor), Error::<T>::IncorrectRole);
+
+			// Ensure nft data won't over flow.
+			ensure!(data.len() as u32 <= T::MaxSize::get(), Error::<T>::DataTooLarge);
+			ensure!(file_name.len() as u32 <= FILENAME_MAXSIZE, Error::<T>::FileNameTooLarge);
 
 			// Set the Nfts storage
 			let nft_id = Self::next_nft_id();
@@ -148,7 +142,7 @@ pub mod module {
 			Nfts::<T>::remove(nft_id);
 			Owners::<T>::remove(nft_id);
 
-			Self::deposit_event(Event::<T>::NftBurned { who: id, nft_id });
+			Self::deposit_event(Event::<T>::NftBurned { owner: id, nft_id });
 			Ok(())
 		}
 
@@ -186,24 +180,26 @@ pub mod module {
 		/// Required Auditor.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::approve_nft())]
-		pub fn approve_nft(origin: OriginFor<T>, nft_id: NftId, result: bool) -> DispatchResult {
+		pub fn approve_nft(origin: OriginFor<T>, nft_id: NftId, approve: bool) -> DispatchResult {
 			// Get the account id
 			let id = ensure_signed(origin)?;
 
 			// Ensure auditor role.
 			T::RoleManager::ensure_role(&id, Role::Auditor)?;
 
-			if result {
-				if let Some((nft_data, user)) = PendingNft::<T>::take(nft_id) {
-					Owners::<T>::insert(nft_id, user.clone());
-					Nfts::<T>::insert(nft_id, nft_data);
-					Self::deposit_event(Event::<T>::NftMinted { who: user, nft_id });
-				}
+			if approve {
+				PendingNft::<T>::take(nft_id)
+					.map(|(nft_data, user)| {
+						Owners::<T>::insert(nft_id, user.clone());
+						Nfts::<T>::insert(nft_id, nft_data);
+						Self::deposit_event(Event::<T>::NftMinted { owner: user, nft_id });
+					})
+					.ok_or(Error::<T>::InvalidNftId)?;
 			} else {
 				PendingNft::<T>::remove(nft_id);
 			}
 
-			Self::deposit_event(Event::<T>::NftAudited { nft_id, result });
+			Self::deposit_event(Event::<T>::NftAudited { nft_id, approve });
 			Ok(())
 		}
 
@@ -219,7 +215,7 @@ pub mod module {
 			// Remove storage
 			Nfts::<T>::remove(nft_id);
 			if let Some(user) = Owners::<T>::take(nft_id) {
-				Self::deposit_event(Event::<T>::NftBurned { who: user, nft_id });
+				Self::deposit_event(Event::<T>::NftBurned { owner: user, nft_id });
 			};
 
 			Ok(())

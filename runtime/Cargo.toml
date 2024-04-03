@@ -56,6 +56,8 @@ pallet-bank = { default-features = false, path = "../pallets/pallet-bank" }
 pallet-roles = { default-features = false, path = "../pallets/pallet-roles" }
 pallet-lottery = { default-features = false, path = "../pallets/pallet-lottery" }
 pallet-governance = { default-features = false, path = "../pallets/pallet-governance" }
+pallet-nft = { default-features = false, path = "../pallets/pallet-nft" }
+
 
 primitives = { default-features = false, path = "../primitives" }
 traits = { default-features = false, path = "../traits" }
@@ -104,6 +106,8 @@ std = [
 	"pallet-roles/std",
 	"pallet-lottery/std",
 	"pallet-governance/std",
+	"pallet-nft/std",
+
 
 	"primitives/std",
 	"traits/std",
@@ -123,6 +127,8 @@ runtime-benchmarks = [
 	"pallet-roles/runtime-benchmarks",
 	"pallet-lottery/runtime-benchmarks",
 	"pallet-governance/runtime-benchmarks",
+	"pallet-nft/runtime-benchmarks",
+
 	"traits/runtime-benchmarks",
 ]
 try-runtime = [
@@ -142,5 +148,7 @@ try-runtime = [
 	"pallet-roles/try-runtime",
 	"pallet-lottery/try-runtime",
 	"pallet-governance/try-runtime",
+	"pallet-nft/try-runtime",
+
 
 ]
