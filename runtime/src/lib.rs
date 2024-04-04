@@ -279,16 +279,12 @@ impl pallet_governance::Config for Runtime {
 	type EnsureGovernance = pallet_governance::EnsureGovernance;
 }
 
-parameter_types! {
-	pub const MaxSize: u32 = 1_000u32;
-}
-
 impl pallet_nft::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type RoleManager = Roles;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
-	type MaxSize = MaxSize;
+	type MaxSize = ConstU32<1000>;
 }
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(

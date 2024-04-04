@@ -16,9 +16,6 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 
 pub const ALICE: AccountId = 1;
 pub const BOB: AccountId = 2;
-pub const CHARLIE: AccountId = 3;
-pub const DAVE: AccountId = 4;
-pub const EVE: AccountId = 5;
 pub const FERDIE: AccountId = 6;
 
 pub const MAX_SIZE: u32 = 1_000u32;
@@ -88,9 +85,6 @@ impl MockGenesisConfig {
 				roles: vec![
 					(ALICE, Role::Customer),
 					(BOB, Role::Customer),
-					(CHARLIE, Role::Customer),
-					(DAVE, Role::Customer),
-					(EVE, Role::Manager),
 					(FERDIE, Role::Auditor),
 				],
 			},

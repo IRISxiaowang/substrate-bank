@@ -22,7 +22,6 @@ mod benchmarking;
 /// Stores Nft data
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct NftData {
-	pub nft_id: NftId,
 	pub data: Vec<u8>,
 	pub file_name: Vec<u8>,
 }
@@ -49,11 +48,12 @@ pub mod module {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The Nft is not belong the user who want to deal with it.
+		/// Error when someone tries to do something with an NFT they don't own.
+		/// For example, trying to sell or change an NFT that belongs to someone else.
 		Unauthorised,
 		/// The account role does not equal to the expected role.
 		IncorrectRole,
-		/// The Nft Id should exist.
+		/// The Nft Id is not exist.
 		InvalidNftId,
 		/// Data is too large.
 		DataTooLarge,
@@ -67,13 +67,13 @@ pub mod module {
 		/// Created an Nft.
 		NftMinted { owner: T::AccountId, nft_id: NftId },
 		/// Burnt an Nft.
-		NftBurned { owner: T::AccountId, nft_id: NftId },
+		NftBurned { nft_id: NftId },
 		/// Transferred an Nft.
 		NftTransferred { from: T::AccountId, to: T::AccountId, nft_id: NftId },
 		/// An Nft created.
 		NFTPending { nft_id: NftId, file_name: Vec<u8> },
-		/// Auditor audited an nft pass or fail.
-		NftAudited { nft_id: NftId, approve: bool },
+		/// Auditor rejected an nft.
+		NftRejected { nft_id: NftId },
 	}
 
 	#[pallet::storage]
@@ -112,7 +112,7 @@ pub mod module {
 			// Ensure role is not auditor.
 			ensure!(T::RoleManager::role(&id) != Some(Role::Auditor), Error::<T>::IncorrectRole);
 
-			// Ensure nft data won't over flow.
+			// Checks if the size of the NFT data is within the allowed maximum limit.
 			ensure!(data.len() as u32 <= T::MaxSize::get(), Error::<T>::DataTooLarge);
 			ensure!(file_name.len() as u32 <= FILENAME_MAXSIZE, Error::<T>::FileNameTooLarge);
 
@@ -121,7 +121,7 @@ pub mod module {
 
 			PendingNft::<T>::insert(
 				nft_id,
-				(NftData { nft_id, data, file_name: file_name.clone() }, id.clone()),
+				(NftData { data, file_name: file_name.clone() }, id.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NFTPending { nft_id, file_name });
@@ -142,7 +142,7 @@ pub mod module {
 			Nfts::<T>::remove(nft_id);
 			Owners::<T>::remove(nft_id);
 
-			Self::deposit_event(Event::<T>::NftBurned { owner: id, nft_id });
+			Self::deposit_event(Event::<T>::NftBurned { nft_id });
 			Ok(())
 		}
 
@@ -157,14 +157,14 @@ pub mod module {
 			// Get the account id
 			let id = ensure_signed(origin)?;
 
-			// Valid nft and owner
-			Self::ensure_nft_is_valid(id.clone(), nft_id)?;
-
 			// Ensure role is not auditor.
 			ensure!(
 				T::RoleManager::role(&to_user) != Some(Role::Auditor),
 				Error::<T>::IncorrectRole
 			);
+
+			// Valid nft and owner
+			Self::ensure_nft_is_valid(id.clone(), nft_id)?;
 
 			// Transfer Nft ownership to new user.
 			Owners::<T>::mutate(nft_id, |user| {
@@ -187,19 +187,19 @@ pub mod module {
 			// Ensure auditor role.
 			T::RoleManager::ensure_role(&id, Role::Auditor)?;
 
-			if approve {
-				PendingNft::<T>::take(nft_id)
-					.map(|(nft_data, user)| {
+			PendingNft::<T>::take(nft_id)
+				.map(|(nft_data, user)| {
+					if approve {
 						Owners::<T>::insert(nft_id, user.clone());
 						Nfts::<T>::insert(nft_id, nft_data);
 						Self::deposit_event(Event::<T>::NftMinted { owner: user, nft_id });
-					})
-					.ok_or(Error::<T>::InvalidNftId)?;
-			} else {
-				PendingNft::<T>::remove(nft_id);
-			}
+					} else {
+						PendingNft::<T>::remove(nft_id);
+						Self::deposit_event(Event::<T>::NftRejected { nft_id });
+					}
+				})
+				.ok_or(Error::<T>::InvalidNftId)?;
 
-			Self::deposit_event(Event::<T>::NftAudited { nft_id, approve });
 			Ok(())
 		}
 
@@ -214,9 +214,9 @@ pub mod module {
 
 			// Remove storage
 			Nfts::<T>::remove(nft_id);
-			if let Some(user) = Owners::<T>::take(nft_id) {
-				Self::deposit_event(Event::<T>::NftBurned { owner: user, nft_id });
-			};
+			Owners::<T>::remove(nft_id);
+
+			Self::deposit_event(Event::<T>::NftBurned { nft_id });
 
 			Ok(())
 		}
@@ -224,7 +224,7 @@ pub mod module {
 
 	impl<T: Config> Pallet<T> {
 		/// Get the nft id to store into the Nfts.
-		fn next_nft_id() -> NftId {
+		pub(crate) fn next_nft_id() -> NftId {
 			NextNftId::<T>::mutate(|id| {
 				*id = id.wrapping_add(1);
 				*id

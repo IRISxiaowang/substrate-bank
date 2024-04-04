@@ -28,11 +28,7 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		Nfts::<T>::insert(
 			1u32,
-			NftData {
-				nft_id: 1u32,
-				data: vec![0x4E, 0x46, 0x54],
-				file_name: vec![0x46, 0x49, 0x4C, 0x45],
-			},
+			NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] },
 		);
 		Owners::<T>::insert(1u32, caller.clone());
 
@@ -50,11 +46,7 @@ mod benchmarks {
 		let to_user: T::AccountId = account("user", 0u32, 0u32);
 		Nfts::<T>::insert(
 			1u32,
-			NftData {
-				nft_id: 1u32,
-				data: vec![0x4E, 0x46, 0x54],
-				file_name: vec![0x46, 0x49, 0x4C, 0x45],
-			},
+			NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] },
 		);
 		Owners::<T>::insert(1u32, caller.clone());
 
@@ -75,11 +67,7 @@ mod benchmarks {
 		PendingNft::<T>::insert(
 			1u32,
 			(
-				NftData {
-					nft_id: 1u32,
-					data: vec![0x4E, 0x46, 0x54],
-					file_name: vec![0x46, 0x49, 0x4C, 0x45],
-				},
+				NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] },
 				owner.clone(),
 			),
 		);
@@ -98,11 +86,7 @@ mod benchmarks {
 
 		Nfts::<T>::insert(
 			1u32,
-			NftData {
-				nft_id: 1u32,
-				data: vec![0x4E, 0x46, 0x54],
-				file_name: vec![0x46, 0x49, 0x4C, 0x45],
-			},
+			NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] },
 		);
 		Owners::<T>::insert(1u32, caller);
 
