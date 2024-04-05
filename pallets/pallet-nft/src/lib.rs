@@ -1,4 +1,7 @@
 //! # NFT Pallet
+//!
+//! This pallet provides functionality for creating, transferring, and burning non-fungible tokens
+//! (NFTs). It supports role-based access control and integrates with a role management system.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -19,7 +22,7 @@ pub use weights::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-/// Stores Nft data
+/// Represents NFT data including its raw data and file name.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct NftData {
 	pub data: Vec<u8>,
@@ -48,31 +51,31 @@ pub mod module {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Error when someone tries to do something with an NFT they don't own.
+		/// The caller is not authorized to perform this operation on the NFT.
 		/// For example, trying to sell or change an NFT that belongs to someone else.
 		Unauthorised,
-		/// The account role does not equal to the expected role.
+		/// The caller's role does not permit this action.
 		IncorrectRole,
-		/// The Nft Id is not exist.
+		/// The specified NFT ID does not exist.
 		InvalidNftId,
-		/// Data is too large.
+		/// The provided data exceeds the allowed size limit.
 		DataTooLarge,
-		/// File name is too large.
+		/// The provided file name exceeds the maximum permitted length.
 		FileNameTooLarge,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Created an Nft.
+		/// Emitted when an NFT is approved by the auditor and minted.
 		NftMinted { owner: T::AccountId, nft_id: NftId },
-		/// Burnt an Nft.
+		/// Emitted when an NFT is burned.
 		NftBurned { nft_id: NftId },
-		/// Transferred an Nft.
+		/// Emitted when an NFT is transferred from one owner to another.
 		NftTransferred { from: T::AccountId, to: T::AccountId, nft_id: NftId },
-		/// An Nft created.
+		/// Emitted when a new NFT is requested to be minted, pending audit.
 		NFTPending { nft_id: NftId, file_name: Vec<u8> },
-		/// Auditor rejected an nft.
+		/// Emitted when an NFT creation is rejected by the auditor.
 		NftRejected { nft_id: NftId },
 	}
 
@@ -98,7 +101,8 @@ pub mod module {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Create an Nft which pending for auditor checking.
+		/// Handles creating an NFT, marking it as pending audit.
+		/// Validates file name and data size, ensuring they comply with pallet constraints.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::request_mint())]
 		pub fn request_mint(
@@ -128,7 +132,8 @@ pub mod module {
 			Ok(())
 		}
 
-		/// Burn an Nft.
+		/// Burns an NFT, removing it from storage.
+		/// Verifies that the caller is the NFT's owner or has appropriate permissions.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::burned())]
 		pub fn burned(origin: OriginFor<T>, nft_id: NftId) -> DispatchResult {
@@ -146,7 +151,8 @@ pub mod module {
 			Ok(())
 		}
 
-		/// Transfer an Nft.
+		/// Transfers an NFT from one account to another.
+		/// Checks for proper ownership and role compliance before proceeding.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
@@ -175,9 +181,8 @@ pub mod module {
 			Ok(())
 		}
 
-		/// Audit an Nft pass or fail.
-		///
-		/// Required Auditor.
+		/// Audits and approves or rejects a pending NFT.
+		/// Require an Auditor role.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::approve_nft())]
 		pub fn approve_nft(origin: OriginFor<T>, nft_id: NftId, approve: bool) -> DispatchResult {
@@ -203,9 +208,8 @@ pub mod module {
 			Ok(())
 		}
 
-		/// Force burn an Nft.
-		///
-		/// Required governance.
+		/// Forces the burning of an NFT, bypassing usual ownership checks.
+		/// Intended for governance use in exceptional situations.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::force_burn())]
 		pub fn force_burn(origin: OriginFor<T>, nft_id: NftId) -> DispatchResult {
