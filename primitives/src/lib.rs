@@ -96,3 +96,6 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 
 /// Proposal Id
 pub type ProposalId = u32;
+
+/// Nft Id
+pub type NftId = u32;
