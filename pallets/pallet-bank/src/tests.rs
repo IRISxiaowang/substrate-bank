@@ -197,7 +197,7 @@ fn cannot_reap_accounts_without_setting_treasury_account() {
 		assert_eq!(Accounts::<Runtime>::get(BOB).free, 100);
 		assert_ok!(Bank::transfer(RuntimeOrigin::signed(BOB), ALICE, 98));
 		assert_eq!(Accounts::<Runtime>::get(BOB).free, 2);
-		// Can not reap accounts when Treasury is not set.
+		// cannot reap accounts when Treasury is not set.
 		Bank::on_finalize(1);
 		assert_eq!(Accounts::<Runtime>::get(BOB).free, 2);
 		// After setting TreasuryAccount, reap_account is working.
@@ -504,7 +504,7 @@ fn can_rotate_treasury() {
 			assert_eq!(Bank::treasury(), Ok(new_treasury));
 			assert_eq!(TreasuryAccount::<Runtime>::get(), Some(new_treasury));
 			assert_eq!(Accounts::<Runtime>::get(new_treasury), account_data);
-			// Verify old data is not exist
+			// Verify old data do not exist
 			assert_eq!(Accounts::<Runtime>::get(TREASURY), AccountData::default());
 
 			TotalIssuance::<Runtime>::mutate(|total| {
@@ -667,7 +667,7 @@ fn can_check_fund_unlock_at() {
 			assert_eq!(20, Bank::fund_unlock_at(BOB, 9));
 			assert_eq!(20, Bank::fund_unlock_at(ALICE, 10));
 
-			// Verify that if lock id is not exist, the function `fund_unlock_at` will return 0.
+			// Verify that if lock id does not exist, the function `fund_unlock_at` will return 0.
 			assert_eq!(0, Bank::fund_unlock_at(ALICE, 8));
 			assert_eq!(0, Bank::fund_unlock_at(charlie, 9));
 			assert_eq!(0, Bank::fund_unlock_at(BOB, 10));

@@ -279,7 +279,7 @@ fn cannot_vote_after_proposal_resolved() {
 			// dispatch
 			Governance::on_finalize(System::block_number());
 
-			// Can not vote after the proposal passed.
+			// cannot vote after the proposal passed.
 			assert_noop!(
 				Governance::vote(RuntimeOrigin::signed(authority_member), first_proposal, true),
 				Error::<Runtime>::InvalidProposalId
@@ -291,7 +291,7 @@ fn cannot_vote_after_proposal_resolved() {
 			// dispatch
 			Governance::on_finalize(System::block_number());
 
-			// Can not vote after the proposal rejected.
+			// cannot vote after the proposal rejected.
 			assert_noop!(
 				Governance::vote(RuntimeOrigin::signed(authority_member), first_proposal, true),
 				Error::<Runtime>::InvalidProposalId
@@ -303,7 +303,7 @@ fn cannot_vote_after_proposal_resolved() {
 			// dispatch
 			Governance::on_finalize(System::block_number());
 
-			// Can not vote after the proposal expired.
+			// cannot vote after the proposal expired.
 			assert_noop!(
 				Governance::vote(RuntimeOrigin::signed(authority_member), first_proposal, true),
 				Error::<Runtime>::InvalidProposalId

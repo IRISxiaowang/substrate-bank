@@ -75,7 +75,7 @@ fn can_auditor_approve_nft() {
 	default_test_ext().execute_with(|| {
 		set_up_nfts();
 
-		// Check nft 2 is not exist
+		// Check nft 2 does not exist
 		assert!(!Nfts::<Runtime>::contains_key(2));
 		assert!(!Owners::<Runtime>::contains_key(2));
 		assert!(PendingNft::<Runtime>::contains_key(2));
@@ -100,7 +100,7 @@ fn can_auditor_reject_nft() {
 	default_test_ext().execute_with(|| {
 		set_up_nfts();
 
-		// Check nft 2 is not exist
+		// Check nft 2 does not exist
 		assert!(!Owners::<Runtime>::contains_key(2));
 		assert!(!Nfts::<Runtime>::contains_key(2));
 		assert!(PendingNft::<Runtime>::contains_key(2));
@@ -145,7 +145,7 @@ fn test_error_incorrect_role() {
 		let valid_file_name = vec![0x46, 0x49, 0x4C, 0x45];
 		let valid_data = vec![0x4E, 0x46, 0x54];
 		set_up_nfts();
-		// Ferdie is auditor who can not create nft
+		// Ferdie is auditor who cannot create nft
 		assert_noop!(
 			Nft::request_mint(
 				RuntimeOrigin::signed(FERDIE),
@@ -155,7 +155,7 @@ fn test_error_incorrect_role() {
 			Error::<Runtime>::IncorrectRole
 		);
 
-		// Ferdie is auditor who can not receive nft
+		// Ferdie is auditor who cannot receive nft
 		assert_noop!(
 			Nft::transfer(RuntimeOrigin::signed(ALICE), FERDIE, 1u32),
 			Error::<Runtime>::IncorrectRole
@@ -167,10 +167,10 @@ fn test_error_incorrect_role() {
 fn test_error_unauthorise() {
 	default_test_ext().execute_with(|| {
 		set_up_nfts();
-		// Bob can not burn nft which belong to Alice.
+		// Bob cannot burn nft which belong to Alice.
 		assert_noop!(Nft::burned(RuntimeOrigin::signed(BOB), 1u32), Error::<Runtime>::Unauthorised);
 
-		// Bob can not transfer the nft which belong to Alice.
+		// Bob cannot transfer the nft which belong to Alice.
 		assert_noop!(
 			Nft::transfer(RuntimeOrigin::signed(BOB), ALICE, 1u32),
 			Error::<Runtime>::Unauthorised
@@ -182,19 +182,16 @@ fn test_error_unauthorise() {
 fn test_error_invalid_nft_id() {
 	default_test_ext().execute_with(|| {
 		set_up_nfts();
-		// Alice can not burn nft which is not exist.
 		assert_noop!(
 			Nft::burned(RuntimeOrigin::signed(ALICE), 2u32),
 			Error::<Runtime>::InvalidNftId
 		);
 
-		// Alice can not transfer nft which is not exist.
 		assert_noop!(
 			Nft::transfer(RuntimeOrigin::signed(ALICE), BOB, 2u32),
 			Error::<Runtime>::InvalidNftId
 		);
 
-		// Auditor can not approve nft which is not exist.
 		assert_noop!(
 			Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 3u32, true),
 			Error::<Runtime>::InvalidNftId
