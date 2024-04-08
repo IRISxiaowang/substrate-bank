@@ -15,6 +15,7 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 		let data: Vec<u8> = vec![0x4E, 0x46, 0x54];
 		let file_name: Vec<u8> = vec![0x46, 0x49, 0x4C, 0x45];
+		assert_ok!(T::RoleManager::register_role(&caller, Role::Customer));
 
 		#[extrinsic_call]
 		request_mint(RawOrigin::Signed(caller), data, file_name);
@@ -44,6 +45,9 @@ mod benchmarks {
 	fn transfer() {
 		let caller: T::AccountId = whitelisted_caller();
 		let to_user: T::AccountId = account("user", 0u32, 0u32);
+		assert_ok!(T::RoleManager::register_role(&caller, Role::Customer));
+		assert_ok!(T::RoleManager::register_role(&to_user, Role::Customer));
+
 		Nfts::<T>::insert(
 			1u32,
 			NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] },

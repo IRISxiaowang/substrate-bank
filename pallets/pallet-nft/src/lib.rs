@@ -11,7 +11,7 @@ use sp_runtime::DispatchResult;
 use sp_std::{prelude::*, vec::Vec};
 
 use primitives::{NftId, Role, FILENAME_MAXSIZE};
-use traits::ManageRoles;
+use traits::{ManageNfts, ManageRoles};
 
 mod mock;
 mod tests;
@@ -54,8 +54,6 @@ pub mod module {
 		/// The caller is not authorized to perform this operation on the NFT.
 		/// For example, trying to sell or change an NFT that belongs to someone else.
 		Unauthorised,
-		/// The caller's role does not permit this action.
-		IncorrectRole,
 		/// The specified NFT ID does not exist.
 		InvalidNftId,
 		/// The provided data exceeds the allowed size limit.
@@ -114,7 +112,7 @@ pub mod module {
 			let id = ensure_signed(origin)?;
 
 			// Ensure role is not auditor.
-			ensure!(T::RoleManager::role(&id) != Some(Role::Auditor), Error::<T>::IncorrectRole);
+			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
 
 			// Checks if the size of the NFT data is within the allowed maximum limit.
 			ensure!(data.len() as u32 <= T::MaxSize::get(), Error::<T>::DataTooLarge);
@@ -141,7 +139,7 @@ pub mod module {
 			let id = ensure_signed(origin)?;
 
 			// Valid nft and owner
-			Self::ensure_nft_is_valid(id.clone(), nft_id)?;
+			Self::ensure_nft_is_valid(&id, nft_id)?;
 
 			// Remove storage
 			Nfts::<T>::remove(nft_id);
@@ -164,13 +162,10 @@ pub mod module {
 			let id = ensure_signed(origin)?;
 
 			// Ensure role is not auditor.
-			ensure!(
-				T::RoleManager::role(&to_user) != Some(Role::Auditor),
-				Error::<T>::IncorrectRole
-			);
+			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
 
 			// Valid nft and owner
-			Self::ensure_nft_is_valid(id.clone(), nft_id)?;
+			Self::ensure_nft_is_valid(&id, nft_id)?;
 
 			// Transfer Nft ownership to new user.
 			Owners::<T>::mutate(nft_id, |user| {
@@ -234,15 +229,40 @@ pub mod module {
 				*id
 			})
 		}
+	}
 
-		fn ensure_nft_is_valid(id: T::AccountId, nft_id: NftId) -> DispatchResult {
+	impl<T: Config> ManageNfts<T::AccountId> for Pallet<T> {
+		fn nft_transfer(
+			from_user: &T::AccountId,
+			to_user: &T::AccountId,
+			nft_id: NftId,
+		) -> DispatchResult {
+			// Ensure role is not auditor.
+			T::RoleManager::ensure_not_role(to_user, Role::Auditor)?;
+
+			// Valid nft and owner
+			Self::ensure_nft_is_valid(from_user, nft_id)?;
+
+			// Transfer Nft ownership to new user.
+			Owners::<T>::mutate(nft_id, |user| {
+				*user = Some(to_user.clone());
+			});
+
+			Ok(())
+		}
+
+		fn ensure_nft_is_valid(id: &T::AccountId, nft_id: NftId) -> DispatchResult {
 			// Ensure the NftId is valid.
 			ensure!(Nfts::<T>::get(nft_id) != None, Error::<T>::InvalidNftId);
 
 			// Ensure the Nft belong to the correct owner.
-			ensure!(Owners::<T>::get(nft_id) == Some(id), Error::<T>::Unauthorised);
+			ensure!(Owners::<T>::get(nft_id) == Some(id.clone()), Error::<T>::Unauthorised);
 
 			Ok(())
+		}
+
+		fn owner(nft_id: NftId) -> Option<T::AccountId> {
+			Owners::<T>::get(nft_id)
 		}
 	}
 }

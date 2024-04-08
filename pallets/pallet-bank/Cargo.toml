@@ -29,6 +29,7 @@ traits = { path = "../../traits", default-features = false }
 sp-io = { git = "https://github.com/paritytech/polkadot-sdk", branch = "release-polkadot-v1.6.0" }
 
 pallet-roles = { path = "../pallet-roles"}
+pallet-nft = { path = "../pallet-nft"}
 
 [features]
 default = ["std"]

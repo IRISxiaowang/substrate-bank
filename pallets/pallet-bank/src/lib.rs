@@ -14,8 +14,8 @@ use sp_runtime::{
 };
 use sp_std::{cmp::min, fmt::Debug, prelude::*, vec::Vec};
 
-use primitives::{LockId, Role};
-use traits::{BasicAccounting, GetTreasury, ManageRoles, Stakable};
+use primitives::{LockId, NftId, Role};
+use traits::{BasicAccounting, GetTreasury, ManageNfts, ManageRoles, Stakable};
 
 mod mock;
 mod tests;
@@ -144,6 +144,8 @@ pub mod module {
 
 		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
+		type NftManager: ManageNfts<Self::AccountId>;
+
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
 
@@ -179,6 +181,10 @@ pub mod module {
 		TreasuryAccountNotSet,
 		/// The account already exists.
 		AccountIdAlreadyTaken,
+		/// The nft id does not for selling.
+		NftNotForSale,
+		/// The nft id does not exist.
+		NftNotExist,
 	}
 
 	#[pallet::event]
@@ -219,6 +225,12 @@ pub mod module {
 
 		/// TreasuryAccount rotated.
 		TreasuryAccountRotated { old: Option<T::AccountId>, new: T::AccountId },
+
+		/// Indicates that an NFT has been listed for sale.
+		PendingNftToSell { nft_id: NftId, price: T::Balance },
+
+		/// Indicates that someone bought an Nft with a certain price.
+		NftBought { who: T::AccountId, nft_id: NftId, price: T::Balance },
 	}
 
 	/// The balance of a token type under an account.
@@ -227,9 +239,9 @@ pub mod module {
 	pub type Accounts<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
 
+	/// Storage item to track the total issuance of the token.
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
-	/// Storage item to track the total issuance of the token.
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// Stores the user ID that will have their fund unlocked at a black.
@@ -250,6 +262,11 @@ pub mod module {
 	#[pallet::storage]
 	#[pallet::getter(fn treasury_account)]
 	pub type TreasuryAccount<T: Config> = StorageValue<_, T::AccountId>;
+
+	/// Stores the pricing information for NFTs awaiting trade.
+	#[pallet::storage]
+	#[pallet::getter(fn pending_trade_nfts)]
+	pub type PendingTradeNfts<T: Config> = StorageMap<_, Blake2_128Concat, NftId, T::Balance>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
@@ -552,6 +569,63 @@ pub mod module {
 			T::RoleManager::ensure_role(&from, Role::Customer)?;
 			T::RoleManager::ensure_role(&to, Role::Customer)?;
 			<Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(&from, &to, amount)
+		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::sell_nft())]
+		pub fn sell_nft(origin: OriginFor<T>, nft_id: NftId, amount: T::Balance) -> DispatchResult {
+			// Get the account id
+			let id = ensure_signed(origin)?;
+
+			// Ensure role is not auditor.
+			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
+
+			// Ensure the nft is belong to the correct owner.
+			T::NftManager::ensure_nft_is_valid(&id, nft_id)?;
+
+			// Add the price to the storage
+			PendingTradeNfts::<T>::insert(nft_id, amount);
+
+			Self::deposit_event(Event::<T>::PendingNftToSell { nft_id, price: amount });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::WeightInfo::buy_nft())]
+		pub fn buy_nft(origin: OriginFor<T>, nft_id: NftId, amount: T::Balance) -> DispatchResult {
+			// Get the account id
+			let buyer = ensure_signed(origin)?;
+
+			// Ensure role is not auditor.
+			T::RoleManager::ensure_not_role(&buyer, Role::Auditor)?;
+
+			match PendingTradeNfts::<T>::get(nft_id) {
+				Some(price) =>
+					if price <= amount {
+						if let Some(seller) = T::NftManager::owner(nft_id) {
+							// Transfer nft
+							T::NftManager::nft_transfer(&seller, &buyer, nft_id)?;
+							// Transfer fund
+							<Self as BasicAccounting<T::AccountId, T::Balance>>::transfer(
+								&buyer, &seller, amount,
+							)?;
+
+							Self::deposit_event(Event::<T>::NftBought {
+								who: buyer,
+								nft_id,
+								price: amount,
+							});
+							Ok(())
+						} else {
+							// The nft does not exist.
+							Err(Error::<T>::NftNotExist.into())
+						}
+					} else {
+						Err(Error::<T>::InsufficientBalance.into())
+					},
+				None => Err(Error::<T>::NftNotForSale.into()),
+			}
 		}
 	}
 }

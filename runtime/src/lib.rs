@@ -228,6 +228,7 @@ impl pallet_bank::Config for Runtime {
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
 	type EnsureGovernance = pallet_governance::EnsureGovernance;
+	type NftManager = Nft;
 	type ExistentialDeposit = ConstU128<DOLLAR>;
 	type MinimumAmount = MinimumAmount;
 	type RedeemPeriod = ConstU32<{ 5 * DAY }>;

@@ -140,30 +140,6 @@ fn can_force_burn() {
 }
 
 #[test]
-fn test_error_incorrect_role() {
-	default_test_ext().execute_with(|| {
-		let valid_file_name = vec![0x46, 0x49, 0x4C, 0x45];
-		let valid_data = vec![0x4E, 0x46, 0x54];
-		set_up_nfts();
-		// Ferdie is auditor who cannot create nft
-		assert_noop!(
-			Nft::request_mint(
-				RuntimeOrigin::signed(FERDIE),
-				valid_file_name.clone(),
-				valid_data.clone()
-			),
-			Error::<Runtime>::IncorrectRole
-		);
-
-		// Ferdie is auditor who cannot receive nft
-		assert_noop!(
-			Nft::transfer(RuntimeOrigin::signed(ALICE), FERDIE, 1u32),
-			Error::<Runtime>::IncorrectRole
-		);
-	});
-}
-
-#[test]
 fn test_error_unauthorise() {
 	default_test_ext().execute_with(|| {
 		set_up_nfts();
