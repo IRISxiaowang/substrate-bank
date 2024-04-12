@@ -17,6 +17,8 @@ use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 use primitives::{NftId, NftState, Response, Role, FILENAME_MAXSIZE};
 use traits::{BasicAccounting, GetTreasury, ManageNfts, ManageRoles};
 
+type PodId = u32;
+
 mod mock;
 mod tests;
 
@@ -32,6 +34,14 @@ pub struct NftData {
 	pub data: Vec<u8>,
 	pub file_name: Vec<u8>,
 	pub state: NftState,
+}
+
+/// Represents .
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct PodInfo<AccountId, Balance> {
+	pub nft_id: NftId,
+	pub to_user: AccountId,
+	pub price: Balance,
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -139,6 +149,10 @@ pub mod module {
 	pub type NextNftId<T: Config> = StorageValue<_, NftId, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn next_pod)]
+	pub type NextPodId<T: Config> = StorageValue<_, PodId, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn pending_nft)]
 	pub type PendingNft<T: Config> =
 		StorageMap<_, Blake2_128Concat, NftId, (NftData, T::AccountId)>;
@@ -153,13 +167,13 @@ pub mod module {
 	/// Stores the pricing information for NFTs awaiting trade.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_trade_nfts)]
-	pub type PendingTradeNfts<T: Config> =
-		StorageMap<_, Blake2_128Concat, NftId, (T::AccountId, T::Balance)>;
+	pub type PendingPodNfts<T: Config> =
+		StorageMap<_, Blake2_128Concat, PodId, PodInfo<T::AccountId, T::Balance>>;
 
 	/// Stores the users' nft ids that will have their nft unlocked at a block.
 	#[pallet::storage]
 	pub type UnlockNft<T: Config> =
-		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, Vec<NftId>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, Vec<(PodId, NftId)>, ValueQuery>;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -169,9 +183,9 @@ pub mod module {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// Unlock nfts that are due.
-			UnlockNft::<T>::take(block_number).into_iter().for_each(|nft_id| {
+			UnlockNft::<T>::take(block_number).into_iter().for_each(|(pod_id, nft_id)| {
 				// Ignore the unlock result - locks can be unlocked early by other means.
-				let _ = Self::unlock(nft_id, UnlockReason::Expired);
+				let _ = Self::cancel_nft_pod(pod_id, nft_id, UnlockReason::Expired);
 			});
 		}
 	}
@@ -316,7 +330,7 @@ pub mod module {
 
 			// Ensure role is not auditor.
 			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
-			T::RoleManager::ensure_not_role(&to_user, Role::Auditor)?;
+			T::RoleManager::ensure_role(&to_user, Role::Customer)?;
 
 			// Ensure the nft is enable to trade.
 			Self::ensure_nft_state(nft_id, NftState::Free)?;
@@ -328,15 +342,22 @@ pub mod module {
 			// Get treasury account.
 			let treasury = T::Bank::treasury()?;
 
+			let pod_id = Self::next_pod_id();
 			// Added the block number that the nft processing will be expired.
 			let expired_at =
 				frame_system::Pallet::<T>::current_block_number() + T::NftLockedPeriod::get();
-			UnlockNft::<T>::append(expired_at, nft_id);
+			UnlockNft::<T>::append(expired_at, (pod_id, nft_id));
 
 			// Add the price and target user to the storage.
-			PendingTradeNfts::<T>::insert(nft_id, (to_user.clone(), amount));
-			// Pay fee to Treasury account.
-			T::Bank::transfer(&id, &treasury, T::Fee::get())?;
+			PendingPodNfts::<T>::insert(
+				pod_id,
+				PodInfo { nft_id, to_user: to_user.clone(), price: amount },
+			);
+
+			// Managers do not pay fee.
+			if T::RoleManager::role(&id) == Some(Role::Customer) {
+				T::Bank::transfer(&id, &treasury, T::Fee::get())?;
+			}
 
 			Self::deposit_event(Event::<T>::NftPodCreated {
 				from: id,
@@ -352,33 +373,39 @@ pub mod module {
 		#[pallet::weight(T::WeightInfo::receive_nft_pod())]
 		pub fn receive_nft_pod(
 			origin: OriginFor<T>,
-			nft_id: NftId,
+			pod_id: PodId,
 			response: Response,
 			tips: Option<T::Balance>,
 		) -> DispatchResult {
 			// Get the account id
 			let buyer = ensure_signed(origin)?;
 
-			// Ensure role is not auditor.
-			T::RoleManager::ensure_not_role(&buyer, Role::Auditor)?;
+			// Ensure buyer role is customer.
+			T::RoleManager::ensure_role(&buyer, Role::Customer)?;
 
 			// Ensure the caller is the intended receiver
-			let (receiver, price) =
-				PendingTradeNfts::<T>::take(nft_id).ok_or(Error::<T>::NftNotForPod)?;
-			ensure!(receiver == buyer, Error::<T>::UnauthorisedReceiver);
+			let pod_info = PendingPodNfts::<T>::take(pod_id).ok_or(Error::<T>::NftNotForPod)?;
+			ensure!(pod_info.to_user == buyer, Error::<T>::UnauthorisedReceiver);
 
 			if response == Response::Accept {
-				let final_amount = price.saturating_add(tips.unwrap_or_default());
+				let final_amount = pod_info.price.saturating_add(tips.unwrap_or_default());
 
 				// Transfer fund to the seller and ownership to the buyer
-				let seller = Self::nft_transfer(nft_id, &buyer)?;
-				T::Bank::transfer(&buyer, &seller, final_amount)?;
+				let seller = Self::nft_transfer(pod_info.nft_id, &buyer)?;
+
+				// Pay fee to Treasury account.
+				let final_seller = match T::RoleManager::role(&seller) {
+					Some(Role::Manager) => T::Bank::treasury()?,
+					_ => seller,
+				};
+
+				T::Bank::transfer(&buyer, &final_seller, final_amount)?;
 
 				Self::deposit_event(Event::<T>::NftDelivered {
-					seller,
+					seller: final_seller,
 					buyer,
-					nft_id,
-					price,
+					nft_id: pod_info.nft_id,
+					price: pod_info.price,
 					tips: tips.unwrap_or_default(),
 				});
 
@@ -386,30 +413,29 @@ pub mod module {
 			} else {
 				// POD is rejected. Cleanup storage and free up the NFT
 				// Change nft state to Free.
-				Self::change_nft_state(nft_id, NftState::Free)?;
+				Self::change_nft_state(pod_info.nft_id, NftState::Free)?;
 
-				Self::deposit_event(Event::<T>::NftRejected { nft_id });
+				Self::deposit_event(Event::<T>::NftRejected { nft_id: pod_info.nft_id });
 				Ok(())
 			}
 		}
 
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::cancel_nft_pod())]
-		pub fn cancel_nft_pod(origin: OriginFor<T>, nft_id: NftId) -> DispatchResult {
+		pub fn cancel_pod(origin: OriginFor<T>, pod_id: PodId) -> DispatchResult {
 			// Get the account id
 			let id = ensure_signed(origin)?;
 
 			// Ensure role is not auditor.
 			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
 
+			let pod_info = PendingPodNfts::<T>::get(pod_id).ok_or(Error::<T>::NftNotForPod)?;
 			// Ensure the nft is enable to trade.
-			Self::ensure_nft_state(nft_id, NftState::POD)?;
+			Self::ensure_nft_state(pod_info.nft_id, NftState::POD)?;
 			// Ensure the nft is belong to the correct owner.
-			Self::ensure_nft_is_valid(&id, nft_id)?;
+			Self::ensure_nft_is_valid(&id, pod_info.nft_id)?;
 			// Change nft state to POD.
-			Self::unlock(nft_id, UnlockReason::Canceled)?;
-
-			Self::deposit_event(Event::<T>::NftCanceled { nft_id, reason: UnlockReason::Canceled });
+			Self::cancel_nft_pod(pod_id, pod_info.nft_id, UnlockReason::Canceled)?;
 
 			Ok(())
 		}
@@ -424,8 +450,16 @@ pub mod module {
 			})
 		}
 
-		fn unlock(nft_id: NftId, reason: UnlockReason) -> DispatchResult {
-			PendingTradeNfts::<T>::remove(nft_id);
+		/// Get the trade id to store into the PendingTradeNft.
+		pub(crate) fn next_pod_id() -> PodId {
+			NextPodId::<T>::mutate(|id| {
+				*id = id.wrapping_add(1);
+				*id
+			})
+		}
+
+		fn cancel_nft_pod(pod_id: PodId, nft_id: NftId, reason: UnlockReason) -> DispatchResult {
+			PendingPodNfts::<T>::remove(pod_id);
 			Self::change_nft_state(nft_id, NftState::Free)?;
 			Self::deposit_event(Event::<T>::NftCanceled { nft_id, reason });
 
