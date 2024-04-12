@@ -10,12 +10,23 @@ fn set_up_nfts() {
 
 	Nfts::<Runtime>::insert(
 		nft_id_1,
-		NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] },
+		NftData {
+			data: vec![0x4E, 0x46, 0x54],
+			file_name: vec![0x46, 0x49, 0x4C, 0x45],
+			state: NftState::Free,
+		},
 	);
 	Owners::<Runtime>::insert(nft_id_1, ALICE);
 	PendingNft::<Runtime>::insert(
 		nft_id_2,
-		(NftData { data: vec![0x4E, 0x46, 0x54], file_name: vec![0x46, 0x49, 0x4C, 0x45] }, BOB),
+		(
+			NftData {
+				data: vec![0x4E, 0x46, 0x54],
+				file_name: vec![0x46, 0x49, 0x4C, 0x45],
+				state: NftState::Free,
+			},
+			BOB,
+		),
 	);
 	assert!(Owners::<Runtime>::contains_key(nft_id_1));
 	assert!(Nfts::<Runtime>::contains_key(nft_id_1));
@@ -81,7 +92,7 @@ fn can_auditor_approve_nft() {
 		assert!(PendingNft::<Runtime>::contains_key(2));
 
 		// Auditor approved the nft
-		assert_ok!(Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 2u32, true));
+		assert_ok!(Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 2u32, Response::Accept));
 
 		// The nft minted
 		assert_eq!(Owners::<Runtime>::get(2), Some(BOB));
@@ -106,7 +117,7 @@ fn can_auditor_reject_nft() {
 		assert!(PendingNft::<Runtime>::contains_key(2));
 
 		// Auditor rejected the nft
-		assert_ok!(Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 2u32, false));
+		assert_ok!(Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 2u32, Response::Reject));
 
 		// The nft is deleted from pendingNft storage.
 		assert!(!Owners::<Runtime>::contains_key(2));
@@ -169,7 +180,7 @@ fn test_error_invalid_nft_id() {
 		);
 
 		assert_noop!(
-			Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 3u32, true),
+			Nft::approve_nft(RuntimeOrigin::signed(FERDIE), 3u32, Response::Accept),
 			Error::<Runtime>::InvalidNftId
 		);
 	});
@@ -208,5 +219,56 @@ fn test_error_data_and_file_name_too_large() {
 			file_name: valid_file_name,
 			nft_id: 1u32,
 		}));
+	});
+}
+
+#[test]
+fn test_ensure_nft_state_is_free() {
+	default_test_ext().execute_with(|| {
+		Nfts::<Runtime>::insert(
+			1u32,
+			NftData {
+				data: vec![0x4E, 0x46, 0x54],
+				file_name: vec![0x46, 0x49, 0x4C, 0x45],
+				state: NftState::Free,
+			},
+		);
+		Nfts::<Runtime>::insert(
+			2u32,
+			NftData {
+				data: vec![0x4E, 0x46, 0x54],
+				file_name: vec![0x46, 0x49, 0x4C, 0x45],
+				state: NftState::POD,
+			},
+		);
+
+		assert_ok!(Nft::ensure_nft_state(1u32, NftState::Free));
+
+		assert_noop!(
+			Nft::ensure_nft_state(2u32, NftState::Free),
+			Error::<Runtime>::NftStateNotMatch
+		);
+
+		assert_noop!(Nft::ensure_nft_state(3u32, NftState::Free), Error::<Runtime>::InvalidNftId);
+	});
+}
+
+#[test]
+fn can_change_nft_state() {
+	default_test_ext().execute_with(|| {
+		Nfts::<Runtime>::insert(
+			1u32,
+			NftData {
+				data: vec![0x4E, 0x46, 0x54],
+				file_name: vec![0x46, 0x49, 0x4C, 0x45],
+				state: NftState::Free,
+			},
+		);
+
+		assert_ok!(Nft::change_nft_state(1u32, NftState::POD));
+
+		assert_eq!(Nfts::<Runtime>::get(1u32).unwrap().state, NftState::POD);
+
+		assert_noop!(Nft::change_nft_state(2u32, NftState::Free), Error::<Runtime>::InvalidNftId);
 	});
 }

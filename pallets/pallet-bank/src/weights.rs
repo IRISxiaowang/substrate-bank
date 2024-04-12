@@ -41,8 +41,6 @@ pub trait WeightInfo {
 	fn set_interest_rate() -> Weight;
 	fn rotate_treasury() -> Weight;
 	fn force_transfer() -> Weight;
-	fn sell_nft() -> Weight;
-	fn buy_nft() -> Weight;
 }
 
 /// Weights for pallet_bank using the Substrate node and recommended hardware.
@@ -199,13 +197,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
 
-	fn sell_nft() -> Weight{
-		Weight::from_parts(1, 0)
-	}
-
-	fn buy_nft() -> Weight{
-		Weight::from_parts(1, 0)
-	}
 
 }
 
@@ -362,11 +353,4 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
 
-	fn sell_nft() -> Weight{
-		Weight::from_parts(1, 0)
-	}
-
-	fn buy_nft() -> Weight{
-		Weight::from_parts(1, 0)
-	}
 }

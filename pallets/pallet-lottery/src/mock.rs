@@ -6,14 +6,12 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, Everything, Randomness},
 };
 
-use primitives::{NftId, DOLLAR, YEAR};
+use primitives::{Balance, DOLLAR, YEAR};
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
-use traits::ManageNfts;
 
 use crate as pallet_lottery;
 
 pub type AccountId = u32;
-pub type Balance = u128;
 
 type BlockNumber = u64;
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -97,23 +95,6 @@ impl Config for Runtime {
 	type TaxRate = TaxRate;
 }
 
-pub struct MockNftManager;
-impl ManageNfts<AccountId> for MockNftManager {
-	fn nft_transfer(
-		_from_user: &AccountId,
-		_to_user: &AccountId,
-		_nft_id: NftId,
-	) -> DispatchResult {
-		unimplemented!()
-	}
-	fn ensure_nft_is_valid(_id: &AccountId, _nft_id: NftId) -> DispatchResult {
-		unimplemented!()
-	}
-	fn owner(_nft_id: NftId) -> Option<AccountId> {
-		unimplemented!()
-	}
-}
-
 parameter_types! {
 	pub const ExistentialDeposit: Balance = ED;
 	pub const MinimumAmount: Balance = MIN;
@@ -130,7 +111,6 @@ impl pallet_bank::Config for Runtime {
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
-	type NftManager = MockNftManager;
 	type ExistentialDeposit = ExistentialDeposit;
 	type MinimumAmount = MinimumAmount;
 	type RedeemPeriod = RedeemPeriod;

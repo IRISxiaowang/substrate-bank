@@ -7,11 +7,15 @@
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
-use sp_runtime::DispatchResult;
-use sp_std::{prelude::*, vec::Vec};
 
-use primitives::{NftId, Role, FILENAME_MAXSIZE};
-use traits::{ManageNfts, ManageRoles};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Saturating},
+	DispatchResult,
+};
+use sp_std::{fmt::Debug, prelude::*, vec::Vec};
+
+use primitives::{NftId, NftState, Response, Role, FILENAME_MAXSIZE};
+use traits::{BasicAccounting, GetTreasury, ManageNfts, ManageRoles};
 
 mod mock;
 mod tests;
@@ -27,12 +31,21 @@ mod benchmarking;
 pub struct NftData {
 	pub data: Vec<u8>,
 	pub file_name: Vec<u8>,
+	pub state: NftState,
+}
+
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum UnlockReason {
+	Expired,
+	Canceled,
 }
 
 pub use module::*;
 
 #[frame_support::pallet]
 pub mod module {
+	use sp_runtime::traits::BlockNumberProvider;
+
 	use super::*;
 
 	#[pallet::config]
@@ -41,12 +54,32 @@ pub mod module {
 
 		type WeightInfo: WeightInfo;
 
+		/// The balance type
+		type Balance: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ Debug
+			+ From<u128>
+			+ sp_std::iter::Sum;
+
 		type RoleManager: ManageRoles<Self::AccountId>;
+
+		type Bank: BasicAccounting<Self::AccountId, Self::Balance> + GetTreasury<Self::AccountId>;
 
 		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		#[pallet::constant]
 		type MaxSize: Get<u32>;
+
+		#[pallet::constant]
+		type Fee: Get<Self::Balance>;
+
+		#[pallet::constant]
+		type NftLockedPeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	#[pallet::error]
@@ -60,6 +93,16 @@ pub mod module {
 		DataTooLarge,
 		/// The provided file name exceeds the maximum permitted length.
 		FileNameTooLarge,
+		/// The Nft is being occupied by another action.
+		NftUnavailable,
+		/// The nft id does not for POD.
+		NftNotForPod,
+		/// The nft id does not exist.
+		NftNotExist,
+		/// The receiver is not compatible with POD receiver.
+		UnauthorisedReceiver,
+		/// The nft state is not the required state.
+		NftStateNotMatch,
 	}
 
 	#[pallet::event]
@@ -73,8 +116,22 @@ pub mod module {
 		NftTransferred { from: T::AccountId, to: T::AccountId, nft_id: NftId },
 		/// Emitted when a new NFT is requested to be minted, pending audit.
 		NFTPending { nft_id: NftId, file_name: Vec<u8> },
-		/// Emitted when an NFT creation is rejected by the auditor.
+		/// Emitted when an NFT creation is rejected by the auditor or the receiver rejected the
+		/// nft.
 		NftRejected { nft_id: NftId },
+		/// Indicates that an NFT has been listed for sale.
+		NftPodCreated { from: T::AccountId, to: T::AccountId, nft_id: NftId, price: T::Balance },
+
+		/// Indicates that someone received an Nft with a certain price.
+		NftDelivered {
+			seller: T::AccountId,
+			buyer: T::AccountId,
+			nft_id: NftId,
+			price: T::Balance,
+			tips: T::Balance,
+		},
+		/// Indicates that the creator canceled the nft on POD.
+		NftCanceled { nft_id: NftId, reason: UnlockReason },
 	}
 
 	#[pallet::storage]
@@ -93,9 +150,31 @@ pub mod module {
 	#[pallet::getter(fn nfts)]
 	pub type Nfts<T: Config> = StorageMap<_, Blake2_128Concat, NftId, NftData>;
 
+	/// Stores the pricing information for NFTs awaiting trade.
+	#[pallet::storage]
+	#[pallet::getter(fn pending_trade_nfts)]
+	pub type PendingTradeNfts<T: Config> =
+		StorageMap<_, Blake2_128Concat, NftId, (T::AccountId, T::Balance)>;
+
+	/// Stores the users' nft ids that will have their nft unlocked at a block.
+	#[pallet::storage]
+	pub type UnlockNft<T: Config> =
+		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, Vec<NftId>, ValueQuery>;
+
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_finalize(block_number: BlockNumberFor<T>) {
+			// Unlock nfts that are due.
+			UnlockNft::<T>::take(block_number).into_iter().for_each(|nft_id| {
+				// Ignore the unlock result - locks can be unlocked early by other means.
+				let _ = Self::unlock(nft_id, UnlockReason::Expired);
+			});
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -123,7 +202,7 @@ pub mod module {
 
 			PendingNft::<T>::insert(
 				nft_id,
-				(NftData { data, file_name: file_name.clone() }, id.clone()),
+				(NftData { data, file_name: file_name.clone(), state: NftState::Free }, id.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NFTPending { nft_id, file_name });
@@ -180,7 +259,11 @@ pub mod module {
 		/// Require an Auditor role.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::approve_nft())]
-		pub fn approve_nft(origin: OriginFor<T>, nft_id: NftId, approve: bool) -> DispatchResult {
+		pub fn approve_nft(
+			origin: OriginFor<T>,
+			nft_id: NftId,
+			response: Response,
+		) -> DispatchResult {
 			// Get the account id
 			let id = ensure_signed(origin)?;
 
@@ -189,7 +272,7 @@ pub mod module {
 
 			PendingNft::<T>::take(nft_id)
 				.map(|(nft_data, user)| {
-					if approve {
+					if response == Response::Accept {
 						Owners::<T>::insert(nft_id, user.clone());
 						Nfts::<T>::insert(nft_id, nft_data);
 						Self::deposit_event(Event::<T>::NftMinted { owner: user, nft_id });
@@ -219,6 +302,117 @@ pub mod module {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::create_nft_pod())]
+		pub fn create_nft_pod(
+			origin: OriginFor<T>,
+			to_user: T::AccountId,
+			nft_id: NftId,
+			amount: T::Balance,
+		) -> DispatchResult {
+			// Get the account id
+			let id = ensure_signed(origin)?;
+
+			// Ensure role is not auditor.
+			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
+			T::RoleManager::ensure_not_role(&to_user, Role::Auditor)?;
+
+			// Ensure the nft is enable to trade.
+			Self::ensure_nft_state(nft_id, NftState::Free)?;
+			// Ensure the nft is belong to the correct owner.
+			Self::ensure_nft_is_valid(&id, nft_id)?;
+			// Change nft state to POD.
+			Self::change_nft_state(nft_id, NftState::POD)?;
+
+			// Get treasury account.
+			let treasury = T::Bank::treasury()?;
+
+			// Added the block number that the nft processing will be expired.
+			let expired_at =
+				frame_system::Pallet::<T>::current_block_number() + T::NftLockedPeriod::get();
+			UnlockNft::<T>::append(expired_at, nft_id);
+
+			// Add the price and target user to the storage.
+			PendingTradeNfts::<T>::insert(nft_id, (to_user.clone(), amount));
+			// Pay fee to Treasury account.
+			T::Bank::transfer(&id, &treasury, T::Fee::get())?;
+
+			Self::deposit_event(Event::<T>::NftPodCreated {
+				from: id,
+				to: to_user,
+				nft_id,
+				price: amount,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::receive_nft_pod())]
+		pub fn receive_nft_pod(
+			origin: OriginFor<T>,
+			nft_id: NftId,
+			response: Response,
+			tips: Option<T::Balance>,
+		) -> DispatchResult {
+			// Get the account id
+			let buyer = ensure_signed(origin)?;
+
+			// Ensure role is not auditor.
+			T::RoleManager::ensure_not_role(&buyer, Role::Auditor)?;
+
+			// Ensure the caller is the intended receiver
+			let (receiver, price) =
+				PendingTradeNfts::<T>::take(nft_id).ok_or(Error::<T>::NftNotForPod)?;
+			ensure!(receiver == buyer, Error::<T>::UnauthorisedReceiver);
+
+			if response == Response::Accept {
+				let final_amount = price.saturating_add(tips.unwrap_or_default());
+
+				// Transfer fund to the seller and ownership to the buyer
+				let seller = Self::nft_transfer(nft_id, &buyer)?;
+				T::Bank::transfer(&buyer, &seller, final_amount)?;
+
+				Self::deposit_event(Event::<T>::NftDelivered {
+					seller,
+					buyer,
+					nft_id,
+					price,
+					tips: tips.unwrap_or_default(),
+				});
+
+				Ok(())
+			} else {
+				// POD is rejected. Cleanup storage and free up the NFT
+				// Change nft state to Free.
+				Self::change_nft_state(nft_id, NftState::Free)?;
+
+				Self::deposit_event(Event::<T>::NftRejected { nft_id });
+				Ok(())
+			}
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::cancel_nft_pod())]
+		pub fn cancel_nft_pod(origin: OriginFor<T>, nft_id: NftId) -> DispatchResult {
+			// Get the account id
+			let id = ensure_signed(origin)?;
+
+			// Ensure role is not auditor.
+			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
+
+			// Ensure the nft is enable to trade.
+			Self::ensure_nft_state(nft_id, NftState::POD)?;
+			// Ensure the nft is belong to the correct owner.
+			Self::ensure_nft_is_valid(&id, nft_id)?;
+			// Change nft state to POD.
+			Self::unlock(nft_id, UnlockReason::Canceled)?;
+
+			Self::deposit_event(Event::<T>::NftCanceled { nft_id, reason: UnlockReason::Canceled });
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -229,26 +423,34 @@ pub mod module {
 				*id
 			})
 		}
+
+		fn unlock(nft_id: NftId, reason: UnlockReason) -> DispatchResult {
+			PendingTradeNfts::<T>::remove(nft_id);
+			Self::change_nft_state(nft_id, NftState::Free)?;
+			Self::deposit_event(Event::<T>::NftCanceled { nft_id, reason });
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> ManageNfts<T::AccountId> for Pallet<T> {
 		fn nft_transfer(
-			from_user: &T::AccountId,
-			to_user: &T::AccountId,
 			nft_id: NftId,
-		) -> DispatchResult {
+			to_user: &T::AccountId,
+		) -> Result<T::AccountId, DispatchError> {
 			// Ensure role is not auditor.
 			T::RoleManager::ensure_not_role(to_user, Role::Auditor)?;
 
+			let owner = Owners::<T>::get(nft_id).ok_or(Error::<T>::InvalidNftId)?;
 			// Valid nft and owner
-			Self::ensure_nft_is_valid(from_user, nft_id)?;
+			Self::ensure_nft_is_valid(&owner, nft_id)?;
 
 			// Transfer Nft ownership to new user.
 			Owners::<T>::mutate(nft_id, |user| {
 				*user = Some(to_user.clone());
 			});
 
-			Ok(())
+			Ok(owner)
 		}
 
 		fn ensure_nft_is_valid(id: &T::AccountId, nft_id: NftId) -> DispatchResult {
@@ -261,8 +463,23 @@ pub mod module {
 			Ok(())
 		}
 
-		fn owner(nft_id: NftId) -> Option<T::AccountId> {
-			Owners::<T>::get(nft_id)
+		fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult {
+			match Nfts::<T>::get(nft_id).map(|nft_data| nft_data.state == state) {
+				Some(true) => Ok(()),
+				Some(false) => Err(Error::<T>::NftStateNotMatch.into()),
+				None => Err(Error::<T>::InvalidNftId.into()),
+			}
+		}
+
+		fn change_nft_state(nft_id: NftId, new_state: NftState) -> DispatchResult {
+			Nfts::<T>::mutate_exists(nft_id, |maybe_nft_data| {
+				if let Some(nft_data) = maybe_nft_data {
+					nft_data.state = new_state;
+					Ok(())
+				} else {
+					Err(Error::<T>::InvalidNftId.into())
+				}
+			})
 		}
 	}
 }

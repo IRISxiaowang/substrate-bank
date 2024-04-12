@@ -4,7 +4,7 @@
 
 use sp_runtime::{DispatchError, DispatchResult};
 
-use primitives::{NftId, Role};
+use primitives::{NftId, NftState, Role};
 
 use sp_std::marker::PhantomData;
 
@@ -39,9 +39,10 @@ pub trait Stakable<AccountId, Balance> {
 
 /// A trait for Nft operations like request mint, burn, transfer and approve.
 pub trait ManageNfts<AccountId> {
-	fn nft_transfer(from_user: &AccountId, to_user: &AccountId, nft_id: NftId) -> DispatchResult;
+	fn nft_transfer(nft_id: NftId, to_user: &AccountId) -> Result<AccountId, DispatchError>;
 	fn ensure_nft_is_valid(id: &AccountId, nft_id: NftId) -> DispatchResult;
-	fn owner(nft_id: NftId) -> Option<AccountId>;
+	fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
+	fn change_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 }
 
 /// A trait for getting the treasury account.

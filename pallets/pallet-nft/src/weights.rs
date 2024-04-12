@@ -36,6 +36,9 @@ pub trait WeightInfo {
 	fn transfer() -> Weight;
 	fn approve_nft() -> Weight;
 	fn force_burn() -> Weight;
+	fn create_nft_pod() -> Weight;
+	fn receive_nft_pod() -> Weight;
+	fn cancel_nft_pod() -> Weight;
 }
 
 /// Weights for pallet_nft using the Substrate node and recommended hardware.
@@ -114,6 +117,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
+
+	fn create_nft_pod() -> Weight{
+		Weight::from_parts(1, 0)
+	}
+
+	fn receive_nft_pod() -> Weight{
+		Weight::from_parts(1, 0)
+	}
+
+	fn cancel_nft_pod() -> Weight{
+		Weight::from_parts(1, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -190,5 +205,17 @@ impl WeightInfo for () {
 		Weight::from_parts(11_000_000, 3653)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+
+	fn create_nft_pod() -> Weight{
+		Weight::from_parts(1, 0)
+	}
+
+	fn receive_nft_pod() -> Weight{
+		Weight::from_parts(1, 0)
+	}
+
+	fn cancel_nft_pod() -> Weight{
+		Weight::from_parts(1, 0)
 	}
 }

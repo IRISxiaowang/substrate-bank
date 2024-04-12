@@ -26,8 +26,6 @@ pub const REDEEM_PERIOD: u64 = 200;
 pub const STAKE_PERIOD: u64 = 150;
 pub const INTEREST_PAYOUT_PERIOD: u64 = 100;
 
-pub const MAX_SIZE: u32 = 1_000u32;
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type BlockNumber = u64;
 
@@ -74,7 +72,6 @@ impl Config for Runtime {
 	type RoleManager = Roles;
 	type BlockNumberProvider = System;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
-	type NftManager = Nft;
 	type ExistentialDeposit = ExistentialDeposit;
 	type MinimumAmount = MinimumAmount;
 	type RedeemPeriod = RedeemPeriod;
@@ -88,17 +85,6 @@ impl pallet_roles::Config for Runtime {
 	type WeightInfo = ();
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 }
-parameter_types! {
-	pub const MaxSize: u32 = MAX_SIZE;
-}
-
-impl pallet_nft::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = ();
-	type RoleManager = Roles;
-	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
-	type MaxSize = MaxSize;
-}
 
 construct_runtime!(
 	pub enum Runtime
@@ -106,7 +92,6 @@ construct_runtime!(
 		System: frame_system,
 		Bank: pallet_bank,
 		Roles: pallet_roles,
-		Nft: pallet_nft,
 	}
 );
 
