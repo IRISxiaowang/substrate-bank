@@ -59,7 +59,7 @@ parameter_types! {
 pub struct MockBank;
 impl BasicAccounting<AccountId, Balance> for MockBank {
 	fn deposit(_user: &AccountId, _amount: Balance) -> DispatchResult {
-		unimplemented!();
+		Ok(())
 	}
 	fn withdraw(_user: &AccountId, _amount: Balance) -> DispatchResult {
 		unimplemented!();

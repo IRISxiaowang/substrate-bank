@@ -2,6 +2,7 @@
 
 use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok};
+use primitives::{NftId, DOLLAR};
 
 /// Set up an Nft to each storage which is easier to test burn, transfer and audit functionality.
 fn set_up_nfts() {
@@ -270,5 +271,197 @@ fn can_change_nft_state() {
 		assert_eq!(Nfts::<Runtime>::get(1u32).unwrap().state, NftState::POD);
 
 		assert_noop!(Nft::change_nft_state(2u32, NftState::Free), Error::<Runtime>::InvalidNftId);
+	});
+}
+
+#[test]
+fn can_create_pod() {
+	default_test_ext().execute_with(|| {
+		set_up_nfts();
+
+		// Check the nft 1 is exist.
+		assert!(Nfts::<Runtime>::contains_key(1));
+
+		// Create pod.
+		assert_ok!(Nft::create_pod(RuntimeOrigin::signed(ALICE), BOB, 1u32, DOLLAR));
+
+		// The nft 1 is on pod.
+		assert!(UnlockNft::<Runtime>::contains_key(
+			System::block_number() + NftLockedPeriod::get()
+		));
+		assert!(PendingPodNfts::<Runtime>::contains_key(1));
+
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftPodCreated {
+			from: ALICE,
+			to: BOB,
+			nft_id: 1u32,
+			price: DOLLAR,
+		}));
+	});
+}
+
+fn set_up_pod(pod_id: PodId, nft_id: NftId) {
+	// Set up created pod data.
+	Nfts::<Runtime>::insert(
+		nft_id,
+		NftData {
+			data: vec![0x4E, 0x46, 0x54],
+			file_name: vec![0x46, 0x49, 0x4C, 0x45],
+			state: NftState::POD,
+		},
+	);
+	Owners::<Runtime>::insert(nft_id, ALICE);
+	UnlockNft::<Runtime>::insert(
+		System::block_number() + NFT_LOCKED_PERIOD,
+		vec![(pod_id, nft_id)],
+	);
+	PendingPodNfts::<Runtime>::insert(pod_id, PodInfo { nft_id, to_user: BOB, price: DOLLAR });
+}
+
+#[test]
+fn can_receive_pod() {
+	default_test_ext().execute_with(|| {
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+
+		// Receive pod.
+		assert_ok!(Nft::receive_pod(
+			RuntimeOrigin::signed(BOB),
+			pod_id,
+			Response::Accept,
+			Some(DOLLAR)
+		));
+
+		// The nft 1 is on pod.
+		assert_eq!(Owners::<Runtime>::get(nft_id), Some(BOB));
+		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
+
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftDelivered {
+			seller: ALICE,
+			buyer: BOB,
+			nft_id,
+			price: DOLLAR,
+			tips: DOLLAR,
+		}));
+	});
+}
+
+#[test]
+fn can_buyer_reject_pod() {
+	default_test_ext().execute_with(|| {
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+
+		// Receive pod.
+		assert_ok!(Nft::receive_pod(RuntimeOrigin::signed(BOB), pod_id, Response::Reject, None));
+
+		// The nft 1 is on pod.
+		assert_eq!(Owners::<Runtime>::get(nft_id), Some(ALICE));
+		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
+
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftRejected { nft_id }));
+	});
+}
+
+#[test]
+fn can_seller_cancel_pod() {
+	default_test_ext().execute_with(|| {
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+
+		// Receive pod.
+		assert_ok!(Nft::cancel_pod(RuntimeOrigin::signed(ALICE), pod_id));
+
+		// The nft 1 is on pod.
+		assert_eq!(Owners::<Runtime>::get(nft_id), Some(ALICE));
+		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
+		assert_eq!(
+			Nfts::<Runtime>::get(nft_id),
+			Some(NftData {
+				data: vec![0x4E, 0x46, 0x54],
+				file_name: vec![0x46, 0x49, 0x4C, 0x45],
+				state: NftState::Free
+			})
+		);
+
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::CancelReason {
+			nft_id,
+			reason: UnlockReason::Canceled,
+		}));
+	});
+}
+
+#[test]
+fn test_error_nft_not_for_pod() {
+	default_test_ext().execute_with(|| {
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+
+		assert_noop!(
+			Nft::receive_pod(RuntimeOrigin::signed(BOB), 2u32, Response::Accept, None),
+			Error::<Runtime>::NftNotForPod
+		);
+
+		assert_noop!(
+			Nft::cancel_pod(RuntimeOrigin::signed(ALICE), 2u32),
+			Error::<Runtime>::NftNotForPod
+		);
+	});
+}
+
+#[test]
+fn test_error_incorrect_receiver() {
+	default_test_ext().execute_with(|| {
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+
+		assert_noop!(
+			Nft::receive_pod(RuntimeOrigin::signed(ALICE), pod_id, Response::Accept, None),
+			Error::<Runtime>::IncorrectReceiver
+		);
+	});
+}
+
+#[test]
+fn test_error_nft_state_not_match() {
+	default_test_ext().execute_with(|| {
+		// nft 1 state = pod, belong to Alice.
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+
+		assert_noop!(
+			Nft::create_pod(RuntimeOrigin::signed(ALICE), BOB, nft_id, DOLLAR),
+			Error::<Runtime>::NftStateNotMatch
+		);
+	});
+}
+
+#[test]
+fn can_nft_pod_expire() {
+	default_test_ext().execute_with(|| {
+		// nft 1 state = pod, belong to Alice.
+		let pod_id = Nft::next_pod_id();
+		let nft_id = Nft::next_nft_id();
+		set_up_pod(pod_id, nft_id);
+		let block = System::block_number() + NftLockedPeriod::get();
+
+		assert!(PendingPodNfts::<Runtime>::contains_key(1));
+		assert!(UnlockNft::<Runtime>::contains_key(block));
+
+		Nft::on_finalize(block);
+
+		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
+		assert!(!UnlockNft::<Runtime>::contains_key(block));
+
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::CancelReason {
+			nft_id,
+			reason: UnlockReason::Expired,
+		}));
 	});
 }

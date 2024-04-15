@@ -103,6 +103,7 @@ fn testnet_genesis(
 					}
 				})
 				.collect::<Vec<_>>(),
+			"treasury": Some(get_account_id_from_seed::<sr25519::Public>("Treasury"))
 		},
 		"roles": {
 			"roles": roles,

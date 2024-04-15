@@ -160,6 +160,7 @@ impl MockGenesisConfig {
 					.into_iter()
 					.map(|(account, free)| (account, free, 0u128))
 					.collect::<Vec<_>>(),
+				treasury: None,
 			},
 			roles: pallet_roles::GenesisConfig {
 				roles: vec![

@@ -256,6 +256,7 @@ pub mod module {
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub balances: Vec<(T::AccountId, T::Balance, T::Balance)>,
+		pub treasury: Option<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
@@ -278,6 +279,7 @@ pub mod module {
 				})
 				.sum();
 			TotalIssuance::<T>::set(total);
+			TreasuryAccount::<T>::set(self.treasury.clone());
 		}
 	}
 

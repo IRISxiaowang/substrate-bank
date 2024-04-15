@@ -121,9 +121,12 @@ impl ExtBuilder {
 		// Build storage
 		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
-		pallet_bank::GenesisConfig::<Runtime> { balances: self.balances }
-			.assimilate_storage(&mut t)
-			.unwrap();
+		pallet_bank::GenesisConfig::<Runtime> {
+			balances: self.balances,
+			treasury: Some(Treasury.account()),
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 		pallet_roles::GenesisConfig::<Runtime> { roles: self.roles }
 			.assimilate_storage(&mut t)
@@ -143,7 +146,6 @@ impl ExtBuilder {
 
 		ext.execute_with(|| {
 			System::set_block_number(1);
-			pallet_bank::TreasuryAccount::<Runtime>::set(Some(Treasury.account()));
 			assert_ok!(Lottery::update_ticket_price(Manager.sign(), DOLLAR));
 		});
 
