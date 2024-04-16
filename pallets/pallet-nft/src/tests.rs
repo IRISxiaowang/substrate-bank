@@ -372,7 +372,7 @@ fn can_seller_cancel_pod() {
 		let nft_id = Nft::next_nft_id();
 		set_up_pod(pod_id, nft_id);
 
-		// Receive pod.
+		// Cancel pod.
 		assert_ok!(Nft::cancel_pod(RuntimeOrigin::signed(ALICE), pod_id));
 
 		// The nft 1 is on pod.

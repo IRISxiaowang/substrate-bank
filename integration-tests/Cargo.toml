@@ -32,6 +32,7 @@ pallet-bank = {path = "../pallets/pallet-bank" }
 pallet-roles = {path = "../pallets/pallet-roles" }
 pallet-lottery = {path = "../pallets/pallet-lottery" }
 pallet-governance = {path = "../pallets/pallet-governance" }
+pallet-nft = {path = "../pallets/pallet-nft" }
 
 primitives = {path = "../primitives" }
 traits = {path = "../traits" }

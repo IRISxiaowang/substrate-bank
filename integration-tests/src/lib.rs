@@ -14,6 +14,7 @@ use xy_chain_runtime::{
 
 mod bank;
 mod lottery;
+mod nft;
 
 pub const INITIAL_BALANCE: Balance = 1_000_000 * DOLLAR;
 pub const TICKETPRICE: Balance = DOLLAR;
@@ -73,7 +74,7 @@ test_account!(PrizePool, [0xFF; 32]);
 
 pub struct ExtBuilder {
 	governance_members: Vec<AccountId>,
-	balances: Vec<(AccountId, Balance, Balance)>,
+	balances: Vec<(AccountId, Balance, Balance)>, // (user account, free balance, reserved balance)
 	roles: Vec<(AccountId, Role)>,
 }
 
