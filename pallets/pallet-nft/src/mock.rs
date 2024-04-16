@@ -95,7 +95,7 @@ impl Config for Runtime {
 	type Bank = MockBank;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type MaxSize = MaxSize;
-	type Fee = Fee;
+	type PodFee = Fee;
 	type NftLockedPeriod = NftLockedPeriod;
 }
 

@@ -286,7 +286,7 @@ fn can_create_pod() {
 		assert_ok!(Nft::create_pod(RuntimeOrigin::signed(ALICE), BOB, 1u32, DOLLAR));
 
 		// The nft 1 is on pod.
-		assert!(UnlockNft::<Runtime>::contains_key(
+		assert!(PodExpiry::<Runtime>::contains_key(
 			System::block_number() + NftLockedPeriod::get()
 		));
 		assert!(PendingPodNfts::<Runtime>::contains_key(1));
@@ -311,7 +311,7 @@ fn set_up_pod(pod_id: PodId, nft_id: NftId) {
 		},
 	);
 	Owners::<Runtime>::insert(nft_id, ALICE);
-	UnlockNft::<Runtime>::insert(
+	PodExpiry::<Runtime>::insert(
 		System::block_number() + NFT_LOCKED_PERIOD,
 		vec![(pod_id, nft_id)],
 	);
@@ -361,7 +361,7 @@ fn can_buyer_reject_pod() {
 		assert_eq!(Owners::<Runtime>::get(nft_id), Some(ALICE));
 		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
 
-		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftRejected { nft_id }));
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftPodRejected { nft_id }));
 	});
 }
 
@@ -387,9 +387,9 @@ fn can_seller_cancel_pod() {
 			})
 		);
 
-		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::CancelReason {
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftPodCanceled {
 			nft_id,
-			reason: UnlockReason::Canceled,
+			reason: CancelReason::Canceled,
 		}));
 	});
 }
@@ -452,16 +452,16 @@ fn can_nft_pod_expire() {
 		let block = System::block_number() + NftLockedPeriod::get();
 
 		assert!(PendingPodNfts::<Runtime>::contains_key(1));
-		assert!(UnlockNft::<Runtime>::contains_key(block));
+		assert!(PodExpiry::<Runtime>::contains_key(block));
 
 		Nft::on_finalize(block);
 
 		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
-		assert!(!UnlockNft::<Runtime>::contains_key(block));
+		assert!(!PodExpiry::<Runtime>::contains_key(block));
 
-		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::CancelReason {
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftPodCanceled {
 			nft_id,
-			reason: UnlockReason::Expired,
+			reason: CancelReason::Expired,
 		}));
 	});
 }

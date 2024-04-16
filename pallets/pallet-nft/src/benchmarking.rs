@@ -174,7 +174,7 @@ mod benchmarks {
 		create_pod(RawOrigin::Signed(caller), to_user, 2u32, DOLLAR.into());
 
 		// Verify
-		assert!(UnlockNft::<T>::contains_key(
+		assert!(PodExpiry::<T>::contains_key(
 			frame_system::Pallet::<T>::current_block_number() + T::NftLockedPeriod::get()
 		));
 		assert!(PendingPodNfts::<T>::contains_key(2));

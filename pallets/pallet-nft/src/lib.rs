@@ -45,7 +45,7 @@ pub struct PodInfo<AccountId, Balance> {
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub enum UnlockReason {
+pub enum CancelReason {
 	Expired,
 	Canceled,
 }
@@ -86,7 +86,7 @@ pub mod module {
 		type MaxSize: Get<u32>;
 
 		#[pallet::constant]
-		type Fee: Get<Self::Balance>;
+		type PodFee: Get<Self::Balance>;
 
 		#[pallet::constant]
 		type NftLockedPeriod: Get<BlockNumberFor<Self>>;
@@ -103,10 +103,8 @@ pub mod module {
 		DataTooLarge,
 		/// The provided file name exceeds the maximum permitted length.
 		FileNameTooLarge,
-		/// The nft id does not for POD.
+		/// The specified NFT is not in the POD (Proof of Deed) state.
 		NftNotForPod,
-		/// The nft id does not exist.
-		NftNotExist,
 		/// The receiver is not compatible with POD receiver.
 		IncorrectReceiver,
 		/// The nft state is not the required state.
@@ -138,8 +136,10 @@ pub mod module {
 			price: T::Balance,
 			tips: T::Balance,
 		},
+		/// Emitted when the receiver rejected the nft.
+		NftPodRejected { nft_id: NftId },
 		/// Indicates that the creator canceled the nft on POD.
-		CancelReason { nft_id: NftId, reason: UnlockReason },
+		NftPodCanceled { nft_id: NftId, reason: CancelReason },
 	}
 
 	#[pallet::storage]
@@ -170,7 +170,7 @@ pub mod module {
 
 	/// Stores the users' nft ids that expiry for POD pending delivery at a block.
 	#[pallet::storage]
-	pub type UnlockNft<T: Config> =
+	pub type PodExpiry<T: Config> =
 		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, Vec<(PodId, NftId)>, ValueQuery>;
 
 	#[pallet::pallet]
@@ -181,9 +181,9 @@ pub mod module {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// Unlock nfts that are due.
-			UnlockNft::<T>::take(block_number).into_iter().for_each(|(pod_id, nft_id)| {
+			PodExpiry::<T>::take(block_number).into_iter().for_each(|(pod_id, nft_id)| {
 				// Ignore the unlock result - locks can be unlocked early by other means.
-				let _ = Self::cancel_nft_pod(pod_id, nft_id, UnlockReason::Expired);
+				let _ = Self::cancel_nft_pod(pod_id, nft_id, CancelReason::Expired);
 			});
 		}
 	}
@@ -344,7 +344,7 @@ pub mod module {
 			// Added the block number that the nft processing will be expired.
 			let expired_at =
 				frame_system::Pallet::<T>::current_block_number() + T::NftLockedPeriod::get();
-			UnlockNft::<T>::append(expired_at, (pod_id, nft_id));
+			PodExpiry::<T>::append(expired_at, (pod_id, nft_id));
 
 			// Add the price and target user to the storage.
 			PendingPodNfts::<T>::insert(
@@ -354,7 +354,7 @@ pub mod module {
 
 			// Managers do not pay fee.
 			if T::RoleManager::role(&id) == Some(Role::Customer) {
-				T::Bank::transfer(&id, &treasury, T::Fee::get())?;
+				T::Bank::transfer(&id, &treasury, T::PodFee::get())?;
 			}
 
 			Self::deposit_event(Event::<T>::NftPodCreated {
@@ -413,7 +413,7 @@ pub mod module {
 				// Change nft state to Free.
 				Self::change_nft_state(pod_info.nft_id, NftState::Free)?;
 
-				Self::deposit_event(Event::<T>::NftRejected { nft_id: pod_info.nft_id });
+				Self::deposit_event(Event::<T>::NftPodRejected { nft_id: pod_info.nft_id });
 				Ok(())
 			}
 		}
@@ -432,7 +432,7 @@ pub mod module {
 			// Ensure the nft is belong to the correct owner.
 			Self::ensure_nft_is_valid(&id, pod_info.nft_id)?;
 			// Change nft state to POD.
-			Self::cancel_nft_pod(pod_id, pod_info.nft_id, UnlockReason::Canceled)?;
+			Self::cancel_nft_pod(pod_id, pod_info.nft_id, CancelReason::Canceled)?;
 
 			Ok(())
 		}
@@ -455,10 +455,10 @@ pub mod module {
 			})
 		}
 
-		fn cancel_nft_pod(pod_id: PodId, nft_id: NftId, reason: UnlockReason) -> DispatchResult {
+		fn cancel_nft_pod(pod_id: PodId, nft_id: NftId, reason: CancelReason) -> DispatchResult {
 			PendingPodNfts::<T>::remove(pod_id);
 			Self::change_nft_state(nft_id, NftState::Free)?;
-			Self::deposit_event(Event::<T>::CancelReason { nft_id, reason });
+			Self::deposit_event(Event::<T>::NftPodCanceled { nft_id, reason });
 
 			Ok(())
 		}

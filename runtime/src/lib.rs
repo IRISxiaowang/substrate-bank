@@ -46,8 +46,8 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 use primitives::{
-	AccountId, Balance, BlockNumber, Hash, LockId, Nonce, Signature, CENT, DAY, DOLLAR,
-	SLOT_DURATION, YEAR,
+	AccountId, Balance, BlockNumber, Hash, LockId, Nonce, Signature, DAY, DOLLAR, SLOT_DURATION,
+	YEAR,
 };
 
 pub mod runtime_api;
@@ -286,8 +286,8 @@ impl pallet_nft::Config for Runtime {
 	type Balance = Balance;
 	type Bank = Bank;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
-	type MaxSize = ConstU32<1000>;
-	type Fee = ConstU128<CENT>;
+	type MaxSize = ConstU32<1_048_576>; // 1MB
+	type PodFee = ConstU128<DOLLAR>;
 	type NftLockedPeriod = ConstU32<DAY>;
 }
 // Create the runtime by composing the FRAME pallets that were previously configured.
