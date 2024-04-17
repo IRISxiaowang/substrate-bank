@@ -115,6 +115,7 @@ pub use module::*;
 
 #[frame_support::pallet]
 pub mod module {
+
 	use sp_runtime::traits::BlockNumberProvider;
 
 	use super::*;
@@ -227,12 +228,12 @@ pub mod module {
 	pub type Accounts<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
 
+	/// Storage item to track the total issuance of the token.
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
-	/// Storage item to track the total issuance of the token.
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
-	/// Stores the user ID that will have their fund unlocked at a black.
+	/// Stores the user ID that will have their fund unlocked at a block.
 	#[pallet::storage]
 	pub type AccountWithUnlockedFund<T: Config> =
 		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, Vec<(T::AccountId, LockId)>, ValueQuery>;
@@ -255,6 +256,7 @@ pub mod module {
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub balances: Vec<(T::AccountId, T::Balance, T::Balance)>,
+		pub treasury: Option<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
@@ -277,6 +279,7 @@ pub mod module {
 				})
 				.sum();
 			TotalIssuance::<T>::set(total);
+			TreasuryAccount::<T>::set(self.treasury.clone());
 		}
 	}
 

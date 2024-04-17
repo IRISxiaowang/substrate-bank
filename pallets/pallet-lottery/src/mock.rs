@@ -6,13 +6,12 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, Everything, Randomness},
 };
 
-use primitives::{DOLLAR, YEAR};
+use primitives::{Balance, DOLLAR, YEAR};
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
 use crate as pallet_lottery;
 
 pub type AccountId = u32;
-pub type Balance = u128;
 
 type BlockNumber = u64;
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -104,6 +103,7 @@ parameter_types! {
 	pub const InterestPayoutPeriod: BlockNumber = INTEREST_PAYOUT_PERIOD;
 	pub const TotalBlocksPerYear: BlockNumber = YEAR as BlockNumber;
 }
+
 impl pallet_bank::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
@@ -124,6 +124,7 @@ impl pallet_roles::Config for Runtime {
 	type WeightInfo = ();
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 }
+
 construct_runtime!(
 	pub enum Runtime
 	{
@@ -159,6 +160,7 @@ impl MockGenesisConfig {
 					.into_iter()
 					.map(|(account, free)| (account, free, 0u128))
 					.collect::<Vec<_>>(),
+				treasury: None,
 			},
 			roles: pallet_roles::GenesisConfig {
 				roles: vec![

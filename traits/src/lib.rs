@@ -4,7 +4,7 @@
 
 use sp_runtime::{DispatchError, DispatchResult};
 
-use primitives::Role;
+use primitives::{NftId, NftState, Role};
 
 use sp_std::marker::PhantomData;
 
@@ -18,6 +18,8 @@ pub trait ManageRoles<AccountId> {
 	fn unregister_role(id: &AccountId) -> DispatchResult;
 	/// Ensure that a user has a specific role.
 	fn ensure_role(id: &AccountId, role: Role) -> DispatchResult;
+	/// Ensure that a user has not a specific role.
+	fn ensure_not_role(id: &AccountId, role: Role) -> DispatchResult;
 }
 
 /// A trait for basic accounting operations like deposit, withdrawal, and transfer.
@@ -33,6 +35,14 @@ pub trait Stakable<AccountId, Balance> {
 	fn stake_funds(user: &AccountId, amount: Balance) -> DispatchResult;
 	fn redeem_funds(user: &AccountId, amount: Balance) -> DispatchResult;
 	fn staked(user: &AccountId) -> Balance;
+}
+
+/// A trait for Nft operations like request mint, burn, transfer and approve.
+pub trait ManageNfts<AccountId> {
+	fn nft_transfer(nft_id: NftId, to_user: &AccountId) -> Result<AccountId, DispatchError>;
+	fn ensure_nft_is_valid(id: &AccountId, nft_id: NftId) -> DispatchResult;
+	fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
+	fn change_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 }
 
 /// A trait for getting the treasury account.

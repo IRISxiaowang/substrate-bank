@@ -112,7 +112,7 @@ impl MockGenesisConfig {
 		let roles = endowed.iter().map(|(id, _, _)| (*id, Role::Customer)).collect();
 		let config = RuntimeGenesisConfig {
 			system: frame_system::GenesisConfig::default(),
-			bank: crate::GenesisConfig { balances: endowed },
+			bank: crate::GenesisConfig { balances: endowed, treasury: None },
 			roles: pallet_roles::GenesisConfig { roles },
 		};
 

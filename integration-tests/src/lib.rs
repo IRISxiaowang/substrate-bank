@@ -14,6 +14,7 @@ use xy_chain_runtime::{
 
 mod bank;
 mod lottery;
+mod nft;
 
 pub const INITIAL_BALANCE: Balance = 1_000_000 * DOLLAR;
 pub const TICKETPRICE: Balance = DOLLAR;
@@ -73,7 +74,7 @@ test_account!(PrizePool, [0xFF; 32]);
 
 pub struct ExtBuilder {
 	governance_members: Vec<AccountId>,
-	balances: Vec<(AccountId, Balance, Balance)>,
+	balances: Vec<(AccountId, Balance, Balance)>, // (user account, free balance, reserved balance)
 	roles: Vec<(AccountId, Role)>,
 }
 
@@ -121,9 +122,12 @@ impl ExtBuilder {
 		// Build storage
 		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
-		pallet_bank::GenesisConfig::<Runtime> { balances: self.balances }
-			.assimilate_storage(&mut t)
-			.unwrap();
+		pallet_bank::GenesisConfig::<Runtime> {
+			balances: self.balances,
+			treasury: Some(Treasury.account()),
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 		pallet_roles::GenesisConfig::<Runtime> { roles: self.roles }
 			.assimilate_storage(&mut t)
@@ -143,7 +147,6 @@ impl ExtBuilder {
 
 		ext.execute_with(|| {
 			System::set_block_number(1);
-			pallet_bank::TreasuryAccount::<Runtime>::set(Some(Treasury.account()));
 			assert_ok!(Lottery::update_ticket_price(Manager.sign(), DOLLAR));
 		});
 

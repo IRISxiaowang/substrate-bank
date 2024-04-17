@@ -39,6 +39,20 @@ pub enum Role {
 	Auditor,
 }
 
+/// Enum representing the different state that an Nft can have.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum NftState {
+	Free,
+	POD,
+}
+
+/// Enum representing the different state that an Nft can have.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum Response {
+	Accept,
+	Reject,
+}
+
 pub use sp_runtime::traits::{BlakeTwo256, Hash as HashT};
 
 /// The block number type used by Polkadot.

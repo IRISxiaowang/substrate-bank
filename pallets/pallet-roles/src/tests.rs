@@ -72,6 +72,28 @@ fn can_unregister_role() {
 }
 
 #[test]
+fn test_ensure_not_role() {
+	default_test_ext().execute_with(|| {
+		AccountRoles::<Runtime>::insert(&ALICE, Role::Customer);
+		AccountRoles::<Runtime>::insert(&BOB, Role::Manager);
+		AccountRoles::<Runtime>::insert(&CHARLIE, Role::Auditor);
+
+		assert_ok!(Roles::ensure_not_role(&ALICE, Role::Auditor));
+		assert_ok!(Roles::ensure_not_role(&BOB, Role::Auditor));
+
+		assert_noop!(
+			Roles::ensure_not_role(&ALICE, Role::Customer),
+			Error::<Runtime>::IncorrectRole
+		);
+
+		assert_noop!(
+			Roles::ensure_not_role(&4u32, Role::Customer),
+			Error::<Runtime>::AccountRoleNotRegistered
+		);
+	});
+}
+
+#[test]
 fn can_bulid() {
 	MockGenesisConfig::with_roles(vec![(ALICE, Role::Manager), (BOB, Role::Customer)])
 		.build()

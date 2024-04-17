@@ -8,6 +8,8 @@ use frame_support::{
 
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
+use primitives::Balance;
+
 use crate as pallet_nft;
 
 pub type AccountId = u32;
@@ -17,8 +19,11 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 pub const ALICE: AccountId = 1;
 pub const BOB: AccountId = 2;
 pub const FERDIE: AccountId = 6;
+pub const TREASURY: AccountId = 255;
 
 pub const MAX_SIZE: u32 = 1_000u32;
+pub const NFT_LOCKED_PERIOD: u64 = 100;
+pub const FEE: u128 = 1u128;
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
@@ -48,15 +53,50 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
+	pub static TransferHistory: Vec<(AccountId, AccountId, Balance)> = Default::default();
+}
+
+pub struct MockBank;
+impl BasicAccounting<AccountId, Balance> for MockBank {
+	fn deposit(_user: &AccountId, _amount: Balance) -> DispatchResult {
+		Ok(())
+	}
+	fn withdraw(_user: &AccountId, _amount: Balance) -> DispatchResult {
+		unimplemented!();
+	}
+	fn transfer(from: &AccountId, to: &AccountId, amount: Balance) -> DispatchResult {
+		let mut history = TransferHistory::get();
+		history.push((*from, *to, amount));
+		TransferHistory::set(history);
+		Ok(())
+	}
+	fn free_balance(_user: &AccountId) -> Balance {
+		unimplemented!();
+	}
+}
+impl GetTreasury<AccountId> for MockBank {
+	fn treasury() -> Result<AccountId, DispatchError> {
+		Ok(TREASURY)
+	}
+}
+
+parameter_types! {
 	pub const MaxSize: u32 = MAX_SIZE;
+	pub const Fee: u128 = FEE;
+	pub const NftLockedPeriod: u64 = NFT_LOCKED_PERIOD;
+
 }
 
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type RoleManager = Roles;
+	type Balance = Balance;
+	type Bank = MockBank;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type MaxSize = MaxSize;
+	type PodFee = Fee;
+	type NftLockedPeriod = NftLockedPeriod;
 }
 
 impl pallet_roles::Config for Runtime {

@@ -283,8 +283,12 @@ impl pallet_nft::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type RoleManager = Roles;
+	type Balance = Balance;
+	type Bank = Bank;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
-	type MaxSize = ConstU32<1000>;
+	type MaxSize = ConstU32<1_048_576>; // 1MB
+	type PodFee = ConstU128<DOLLAR>;
+	type NftLockedPeriod = ConstU32<DAY>;
 }
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(

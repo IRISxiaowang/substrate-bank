@@ -4,7 +4,7 @@ use crate::{mock::*, *};
 
 use codec::Decode;
 use frame_support::{assert_noop, assert_ok, traits::Randomness};
-use primitives::DOLLAR;
+use primitives::{Balance, DOLLAR};
 use sp_runtime::Percent;
 
 const INITIAL_BALANCE: u128 = 1_000 * DOLLAR;

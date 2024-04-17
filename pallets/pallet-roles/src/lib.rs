@@ -156,4 +156,16 @@ impl<T: Config> ManageRoles<T::AccountId> for Pallet<T> {
 			None => Err(Error::<T>::AccountRoleNotRegistered.into()),
 		}
 	}
+
+	fn ensure_not_role(id: &T::AccountId, role: Role) -> DispatchResult {
+		match AccountRoles::<T>::get(id) {
+			Some(r) =>
+				if r != role {
+					Ok(())
+				} else {
+					Err(Error::<T>::IncorrectRole.into())
+				},
+			None => Err(Error::<T>::AccountRoleNotRegistered.into()),
+		}
+	}
 }
