@@ -43,7 +43,7 @@ pub enum Role {
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum NftState {
 	Free,
-	POD,
+	POD(PodId),
 }
 
 /// Enum representing the different state that an Nft can have.
@@ -113,3 +113,25 @@ pub type ProposalId = u32;
 
 /// Nft Id
 pub type NftId = u32;
+
+/// Pod Id
+pub type PodId = u32;
+
+/// Represent RpcNftData including all the information of nft on pod that customer needed.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
+pub struct RpcNftData {
+	pub pod_id: PodId,
+	pub sender: AccountId,
+	pub nft_id: NftId,
+	pub nft_name: Vec<u8>,
+	pub expiry_block: BlockNumber,
+	pub price: Balance,
+}
+
+/// Represent NftQueryResponse including all the information of nft on pod that related the customer
+/// on sending or receiving.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
+pub struct PendingNftPods {
+	pub delivering: Vec<RpcNftData>, // Nft being delivered to someone else
+	pub receiving: Vec<RpcNftData>,  // Nft that needs to be received
+}

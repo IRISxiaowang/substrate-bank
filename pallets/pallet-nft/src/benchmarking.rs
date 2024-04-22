@@ -139,13 +139,19 @@ mod benchmarks {
 			NftData {
 				data: vec![0x4E, 0x46, 0x54],
 				file_name: vec![0x46, 0x49, 0x4C, 0x45],
-				state: NftState::POD,
+				state: NftState::POD(pod_id_1),
 			},
 		);
 		Owners::<T>::insert(nft_id_1, caller.clone());
 		PendingPodNfts::<T>::insert(
 			pod_id_1,
-			PodInfo { nft_id: nft_id_1, to_user, price: DOLLAR.into() },
+			PodInfo {
+				nft_id: nft_id_1,
+				to_user,
+				price: DOLLAR.into(),
+				block_expired: frame_system::Pallet::<T>::current_block_number() +
+					T::NftLockedPeriod::get(),
+			},
 		);
 		// Nft 2 for creating pod
 		let nft_id_2 = Pallet::<T>::next_nft_id();
