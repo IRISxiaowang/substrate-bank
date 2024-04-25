@@ -117,7 +117,7 @@ pub type NftId = u32;
 /// Pod Id
 pub type PodId = u32;
 
-/// Represent RpcNftData including all the information of nft on pod that customer needed.
+/// Contains information on a Nft that is currently in PoD (Paid On Delivery)
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
 pub struct RpcNftData {
 	pub pod_id: PodId,
@@ -128,8 +128,8 @@ pub struct RpcNftData {
 	pub price: Balance,
 }
 
-/// Represent NftQueryResponse including all the information of nft on pod that related the customer
-/// on sending or receiving.
+/// Contains the details of NFTs on POD (Paid On Delivery)
+/// that are either being sent or received by the customer.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
 pub struct PendingNftPods {
 	pub delivering: Vec<RpcNftData>, // Nft being delivered to someone else

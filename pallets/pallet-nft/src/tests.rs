@@ -315,7 +315,7 @@ fn set_up_pod(pod_id: PodId, nft_id: NftId) {
 	PodExpiry::<Runtime>::insert(expire_at, vec![(pod_id, nft_id)]);
 	PendingPodNfts::<Runtime>::insert(
 		pod_id,
-		PodInfo { nft_id, to_user: BOB, price: DOLLAR, block_expired: expire_at },
+		PodInfo { nft_id, to_user: BOB, price: DOLLAR, expiry_block: expire_at },
 	);
 }
 

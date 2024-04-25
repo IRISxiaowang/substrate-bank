@@ -41,7 +41,7 @@ pub struct PodInfo<T: Config> {
 	pub nft_id: NftId,
 	pub to_user: T::AccountId,
 	pub price: T::Balance,
-	pub block_expired: BlockNumberFor<T>,
+	pub expiry_block: BlockNumberFor<T>,
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -102,7 +102,7 @@ pub mod module {
 		DataTooLarge,
 		/// The provided file name exceeds the maximum permitted length.
 		FileNameTooLarge,
-		/// The specified NFT is not in the POD (Proof of Deed) state.
+		/// The specified NFT is not in the POD (Paid on Delivery) state.
 		NftNotForPod,
 		/// The receiver is not compatible with POD receiver.
 		IncorrectReceiver,
@@ -358,7 +358,7 @@ pub mod module {
 					nft_id,
 					to_user: to_user.clone(),
 					price: amount,
-					block_expired: expired_at,
+					expiry_block: expired_at,
 				},
 			);
 

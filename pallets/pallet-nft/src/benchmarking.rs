@@ -149,7 +149,7 @@ mod benchmarks {
 				nft_id: nft_id_1,
 				to_user,
 				price: DOLLAR.into(),
-				block_expired: frame_system::Pallet::<T>::current_block_number() +
+				expiry_block: frame_system::Pallet::<T>::current_block_number() +
 					T::NftLockedPeriod::get(),
 			},
 		);

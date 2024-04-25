@@ -383,33 +383,42 @@ impl_runtime_apis! {
 		fn fund_unlock_at(who: AccountId, lock_id: LockId) -> BlockNumber {
 			Bank::fund_unlock_at(who, lock_id)
 		}
+
 		/// Returns certain user's related Nft in POD info.
-		fn pending_pods(who:AccountId) -> PendingNftPods {
+		fn pending_pods(who: AccountId) -> PendingNftPods {
 			PendingNftPods {
-				delivering:pallet_nft::PendingPodNfts::<Runtime>::iter().filter_map(|(pod_id,pod_info)|
-					(who.clone() == pallet_nft::Owners::<Runtime>::get(pod_info.nft_id).expect("Nft in POD must have an owner.")).then_some(
-						RpcNftData {
+				delivering: pallet_nft::PendingPodNfts::<Runtime>::iter()
+					.filter_map(|(pod_id, pod_info)| {
+						(who ==
+							pallet_nft::Owners::<Runtime>::get(pod_info.nft_id)
+								.expect("Nft in POD must have an owner."))
+						.then_some(RpcNftData {
 							pod_id,
 							sender: who.clone(),
 							nft_id: pod_info.nft_id,
-							nft_name: pallet_nft::Nfts::<Runtime>::get(pod_info.nft_id).expect("Nft in POD must have an owner.").file_name,
-							expiry_block: pod_info.block_expired,
+							nft_name: pallet_nft::Nfts::<Runtime>::get(pod_info.nft_id)
+								.expect("Nft in POD must have an owner.")
+								.file_name,
+							expiry_block: pod_info.expiry_block,
 							price: pod_info.price,
-						}
-					)
-				).collect(),
-				receiving: pallet_nft::PendingPodNfts::<Runtime>::iter().filter_map(|(pod_id,pod_info)|
-					(pod_info.to_user == who).then_some(
-						RpcNftData {
+						})
+					})
+					.collect(),
+				receiving: pallet_nft::PendingPodNfts::<Runtime>::iter()
+					.filter_map(|(pod_id, pod_info)| {
+						(pod_info.to_user == who).then_some(RpcNftData {
 							pod_id,
-							sender: pallet_nft::Owners::<Runtime>::get(pod_info.nft_id).expect("Nft in POD must have an owner."),
+							sender: pallet_nft::Owners::<Runtime>::get(pod_info.nft_id)
+								.expect("Nft in POD must have an owner."),
 							nft_id: pod_info.nft_id,
-							nft_name: pallet_nft::Nfts::<Runtime>::get(pod_info.nft_id).expect("Nft in POD must have an owner.").file_name,
-							expiry_block: pod_info.block_expired,
+							nft_name: pallet_nft::Nfts::<Runtime>::get(pod_info.nft_id)
+								.expect("Nft in POD must have an owner.")
+								.file_name,
+							expiry_block: pod_info.expiry_block,
 							price: pod_info.price,
-						}
-					)
-				).collect(),
+						})
+					})
+					.collect(),
 			}
 		}
 	}
