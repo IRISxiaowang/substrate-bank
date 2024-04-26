@@ -8,7 +8,7 @@ use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 use pallet_bank::AccountData;
-use primitives::{AccountId, Balance, BlockNumber, LockId};
+use primitives::{AccountId, Balance, BlockNumber, LockId, PendingNftPods};
 
 /// Custom tool for translating Dispatch error to a human readable format.
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -36,5 +36,7 @@ decl_runtime_apis!(
 		fn interest_pa(who: AccountId) -> Balance;
 		/// Returns when a locked fund is released.
 		fn fund_unlock_at(who: AccountId, lock_id: LockId) -> BlockNumber;
+		/// Returns certain user's related Nft in POD info.
+		fn pending_pods(who: AccountId) -> PendingNftPods;
 	}
 );

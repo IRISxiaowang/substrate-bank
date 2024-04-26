@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Block as BlockT;
 
 use pallet_bank::{AccountData, LockReason, LockedFund};
-use primitives::{AccountId, Balance, BlockNumber, Hash, LockId};
+use primitives::{AccountId, Balance, BlockNumber, Hash, LockId, PendingNftPods};
 use xy_chain_runtime::runtime_api::{CustomRuntimeApi, DispatchErrorTranslator};
 
 use std::{marker::PhantomData, sync::Arc};
@@ -56,6 +56,9 @@ pub trait CustomRpcApi {
 	/// Returns the interest earned per annum.
 	#[method(name = "interest_pa")]
 	fn rpc_interest_pa(&self, who: AccountId, at: Option<Hash>) -> RpcResult<Balance>;
+	/// Returns certain user's related Nft in POD info.
+	#[method(name = "pending_pods")]
+	fn rpc_pending_pods(&self, who: AccountId, at: Option<Hash>) -> RpcResult<PendingNftPods>;
 }
 
 pub struct CustomRpc<C, B> {
@@ -118,6 +121,13 @@ where
 		self.client
 			.runtime_api()
 			.interest_pa(self.unwrap_or_best(at), who)
+			.map_err(to_rpc_error)
+	}
+
+	fn rpc_pending_pods(&self, who: AccountId, at: Option<Hash>) -> RpcResult<PendingNftPods> {
+		self.client
+			.runtime_api()
+			.pending_pods(self.unwrap_or_best(at), who)
 			.map_err(to_rpc_error)
 	}
 }

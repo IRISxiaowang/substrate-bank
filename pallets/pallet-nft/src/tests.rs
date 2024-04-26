@@ -239,7 +239,7 @@ fn test_ensure_nft_state_is_free() {
 			NftData {
 				data: vec![0x4E, 0x46, 0x54],
 				file_name: vec![0x46, 0x49, 0x4C, 0x45],
-				state: NftState::POD,
+				state: NftState::POD(20),
 			},
 		);
 
@@ -266,9 +266,9 @@ fn can_change_nft_state() {
 			},
 		);
 
-		assert_ok!(Nft::change_nft_state(1u32, NftState::POD));
+		assert_ok!(Nft::change_nft_state(1u32, NftState::POD(100)));
 
-		assert_eq!(Nfts::<Runtime>::get(1u32).unwrap().state, NftState::POD);
+		assert_eq!(Nfts::<Runtime>::get(1u32).unwrap().state, NftState::POD(100));
 
 		assert_noop!(Nft::change_nft_state(2u32, NftState::Free), Error::<Runtime>::InvalidNftId);
 	});
@@ -302,20 +302,21 @@ fn can_create_pod() {
 
 fn set_up_pod(pod_id: PodId, nft_id: NftId) {
 	// Set up created pod data.
+	let expire_at = System::block_number() + NFT_LOCKED_PERIOD;
 	Nfts::<Runtime>::insert(
 		nft_id,
 		NftData {
 			data: vec![0x4E, 0x46, 0x54],
 			file_name: vec![0x46, 0x49, 0x4C, 0x45],
-			state: NftState::POD,
+			state: NftState::POD(pod_id),
 		},
 	);
 	Owners::<Runtime>::insert(nft_id, ALICE);
-	PodExpiry::<Runtime>::insert(
-		System::block_number() + NFT_LOCKED_PERIOD,
-		vec![(pod_id, nft_id)],
+	PodExpiry::<Runtime>::insert(expire_at, vec![(pod_id, nft_id)]);
+	PendingPodNfts::<Runtime>::insert(
+		pod_id,
+		PodInfo { nft_id, to_user: BOB, price: DOLLAR, expiry_block: expire_at },
 	);
-	PendingPodNfts::<Runtime>::insert(pod_id, PodInfo { nft_id, to_user: BOB, price: DOLLAR });
 }
 
 #[test]

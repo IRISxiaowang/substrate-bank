@@ -9,15 +9,13 @@ use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating},
+	traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
 	DispatchResult,
 };
 use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 
-use primitives::{NftId, NftState, Response, Role, FILENAME_MAXSIZE};
+use primitives::{NftId, NftState, PodId, Response, Role, FILENAME_MAXSIZE};
 use traits::{BasicAccounting, GetTreasury, ManageNfts, ManageRoles};
-
-pub type PodId = u32;
 
 mod mock;
 mod tests;
@@ -36,12 +34,14 @@ pub struct NftData {
 	pub state: NftState,
 }
 
-/// Represents .
+/// Represents Pod information including its nft id, price and the target user.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub struct PodInfo<AccountId, Balance> {
+#[scale_info(skip_type_params(T))]
+pub struct PodInfo<T: Config> {
 	pub nft_id: NftId,
-	pub to_user: AccountId,
-	pub price: Balance,
+	pub to_user: T::AccountId,
+	pub price: T::Balance,
+	pub expiry_block: BlockNumberFor<T>,
 }
 
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -54,7 +54,6 @@ pub use module::*;
 
 #[frame_support::pallet]
 pub mod module {
-	use sp_runtime::traits::BlockNumberProvider;
 
 	use super::*;
 
@@ -103,7 +102,7 @@ pub mod module {
 		DataTooLarge,
 		/// The provided file name exceeds the maximum permitted length.
 		FileNameTooLarge,
-		/// The specified NFT is not in the POD (Proof of Deed) state.
+		/// The specified NFT is not in the POD (Paid on Delivery) state.
 		NftNotForPod,
 		/// The receiver is not compatible with POD receiver.
 		IncorrectReceiver,
@@ -165,8 +164,7 @@ pub mod module {
 	/// Stores the pricing information for NFTs awaiting trade.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_trade_nfts)]
-	pub type PendingPodNfts<T: Config> =
-		StorageMap<_, Blake2_128Concat, PodId, PodInfo<T::AccountId, T::Balance>>;
+	pub type PendingPodNfts<T: Config> = StorageMap<_, Blake2_128Concat, PodId, PodInfo<T>>;
 
 	/// Stores the users' nft ids that expiry for POD pending delivery at a block.
 	#[pallet::storage]
@@ -180,9 +178,9 @@ pub mod module {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
-			// Unlock nfts that are due.
+			// Expire nfts that are due.
 			PodExpiry::<T>::take(block_number).into_iter().for_each(|(pod_id, nft_id)| {
-				// Ignore the unlock result - locks can be unlocked early by other means.
+				// Ignore the expired result.
 				let _ = Self::cancel_nft_pod(pod_id, nft_id, CancelReason::Expired);
 			});
 		}
@@ -231,6 +229,9 @@ pub mod module {
 
 			// Valid nft and owner
 			Self::ensure_nft_is_valid(&id, nft_id)?;
+
+			// Ensure the nft is enable to burn.
+			Self::ensure_nft_state(nft_id, NftState::Free)?;
 
 			// Remove storage
 			Nfts::<T>::remove(nft_id);
@@ -307,7 +308,11 @@ pub mod module {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			// Remove storage
-			Nfts::<T>::remove(nft_id);
+			if let Some(nft_data) = Nfts::<T>::take(nft_id) {
+				if let NftState::POD(pod_id) = nft_data.state {
+					PendingPodNfts::<T>::remove(pod_id);
+				}
+			}
 			Owners::<T>::remove(nft_id);
 
 			Self::deposit_event(Event::<T>::NftBurned { nft_id });
@@ -335,12 +340,12 @@ pub mod module {
 			// Ensure the nft is belong to the correct owner.
 			Self::ensure_nft_is_valid(&id, nft_id)?;
 			// Change nft state to POD.
-			Self::change_nft_state(nft_id, NftState::POD)?;
+			let pod_id = Self::next_pod_id();
+			Self::change_nft_state(nft_id, NftState::POD(pod_id))?;
 
 			// Get treasury account.
 			let treasury = T::Bank::treasury()?;
 
-			let pod_id = Self::next_pod_id();
 			// Added the block number that the nft processing will be expired.
 			let expired_at =
 				frame_system::Pallet::<T>::current_block_number() + T::NftLockedPeriod::get();
@@ -349,7 +354,12 @@ pub mod module {
 			// Add the price and target user to the storage.
 			PendingPodNfts::<T>::insert(
 				pod_id,
-				PodInfo { nft_id, to_user: to_user.clone(), price: amount },
+				PodInfo {
+					nft_id,
+					to_user: to_user.clone(),
+					price: amount,
+					expiry_block: expired_at,
+				},
 			);
 
 			// Managers do not pay fee.
