@@ -1,5 +1,6 @@
 // Import
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { encodeAddress } from '@polkadot/util-crypto';
 
 export async function getApi() {
     const api = await ApiPromise.create({
@@ -104,3 +105,13 @@ export async function sendExtrinsicAndWait(extrinsic, signer) {
         await sleep(500);
     }
 } 
+
+export function bytesArrayToPolkadotAddress(byteArray) {
+    // Convert the byte array to a Uint8Array
+    const byteU8Array = new Uint8Array(byteArray);
+
+    // Encode the Uint8Array to a Polkadot address
+    const polkadotAddress = encodeAddress(byteU8Array, 42); // The second argument is the SS58 prefix, 0 is for Polkadot
+
+    return polkadotAddress;
+}

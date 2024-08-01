@@ -121,8 +121,7 @@ pub mod module {
 		NftTransferred { from: T::AccountId, to: T::AccountId, nft_id: NftId },
 		/// Emitted when a new NFT is requested to be minted, pending audit.
 		NFTPending { nft_id: NftId, file_name: Vec<u8> },
-		/// Emitted when an NFT creation is rejected by the auditor or the receiver rejected the
-		/// nft.
+		/// Emitted when an NFT creation is rejected by the auditor rejected the nft.
 		NftRejected { nft_id: NftId },
 		/// Indicates that an NFT has been listed for sale.
 		NftPodCreated { from: T::AccountId, to: T::AccountId, nft_id: NftId, price: T::Balance },
@@ -290,7 +289,6 @@ pub mod module {
 						Nfts::<T>::insert(nft_id, nft_data);
 						Self::deposit_event(Event::<T>::NftMinted { owner: user, nft_id });
 					} else {
-						PendingNft::<T>::remove(nft_id);
 						Self::deposit_event(Event::<T>::NftRejected { nft_id });
 					}
 				})
