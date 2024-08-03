@@ -75,8 +75,6 @@ pub mod module {
 	pub enum Error<T> {
 		/// The prize split total is not equal to one.
 		InvalidPrizeSplitTotal,
-		/// The account role does not equal to the expected role.
-		IncorrectRole,
 		/// The ticket price is not set.
 		TicketPriceNotSet,
 		/// Tax rate must be between 0% - 100%.
@@ -175,11 +173,8 @@ pub mod module {
 		#[pallet::weight(T::WeightInfo::update_ticket_price())]
 		pub fn update_ticket_price(origin: OriginFor<T>, new_price: T::Balance) -> DispatchResult {
 			let id = ensure_signed(origin)?;
-			let role = T::RoleManager::role(&id);
-			ensure!(
-				role == Some(Role::Manager) || role == Some(Role::Auditor),
-				Error::<T>::IncorrectRole
-			);
+
+			T::RoleManager::ensure_not_role(&id, Role::Customer)?;
 
 			// Update the ticket price
 			TicketPrice::<T>::put(new_price);

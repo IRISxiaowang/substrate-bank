@@ -78,7 +78,7 @@ fn customer_cannot_update_ticket_price() {
 		// Customer Alice
 		assert_noop!(
 			Lottery::update_ticket_price(RuntimeOrigin::signed(ALICE), 1),
-			Error::<Runtime>::IncorrectRole
+			pallet_roles::Error::<Runtime>::IncorrectRole
 		);
 	});
 }
