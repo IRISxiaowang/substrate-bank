@@ -1,0 +1,11 @@
+{
+  "name": "e2e-tests",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@polkadot/api": "^10.12.1"
+  },
+  "packageManager": "yarn@4.0.2",
+  "type": "module"
+}
