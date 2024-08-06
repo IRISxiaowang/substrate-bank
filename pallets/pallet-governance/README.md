@@ -1,3 +1,3 @@
-# AccountRole module
+# Governance module
 
 ## Overview

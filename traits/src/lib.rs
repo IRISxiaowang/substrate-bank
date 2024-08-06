@@ -4,7 +4,7 @@
 
 use sp_runtime::{DispatchError, DispatchResult};
 
-use primitives::{NftId, NftState, Role};
+use primitives::{AuctionId, NftId, NftState, Role};
 
 use sp_std::marker::PhantomData;
 
@@ -43,6 +43,11 @@ pub trait ManageNfts<AccountId> {
 	fn ensure_nft_is_valid(id: &AccountId, nft_id: NftId) -> DispatchResult;
 	fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 	fn change_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
+}
+
+/// A trait for Auction operations like force cancel.
+pub trait ManageAuctions<AccountId> {
+	fn force_cancel(auction_id: AuctionId) -> DispatchResult;
 }
 
 /// A trait for getting the treasury account.
