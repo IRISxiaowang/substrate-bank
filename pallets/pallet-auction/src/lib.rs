@@ -15,7 +15,7 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 
-use primitives::{AuctionId, NftId, NftState, Role};
+use primitives::{AuctionId, NftId, NftState};
 use traits::{BasicAccounting, GetTreasury, ManageAuctions, ManageNfts, ManageRoles};
 
 //mod mock;
@@ -33,7 +33,6 @@ pub use weights::*;
 #[scale_info(skip_type_params(T))]
 pub struct AuctionData<T: Config> {
 	pub nft_id: NftId,
-	pub owner: T::AccountId,
 	pub start: Option<T::Balance>,
 	pub reserve: Option<T::Balance>,
 	pub buy_now: Option<T::Balance>,
@@ -97,7 +96,7 @@ pub mod module {
 		BidPriceTooLow,
 		/// When the current auction price exceeds the reserve price, the auction can not be
 		/// canceled.
-		AuctionCancelFailed,
+		CannotCancelAuction,
 	}
 
 	#[pallet::event]
@@ -121,7 +120,7 @@ pub mod module {
 		},
 
 		/// Emitted when a new bid is placed on an auction.
-		Bid { who: T::AccountId, auction_id: AuctionId, price: T::Balance },
+		BidRegistered { new_bidder: T::AccountId, auction_id: AuctionId, new_price: T::Balance },
 	}
 
 	#[pallet::storage]
@@ -148,7 +147,9 @@ pub mod module {
 			// Expire auctions that are due.
 			AuctionsExpiryBlock::<T>::take(block_number).into_iter().for_each(|auction_id| {
 				if let Some(auction_data) = Auctions::<T>::take(auction_id) {
-					Self::resolve_auction(auction_id, auction_data);
+					if auction_data.expiry_block == block_number {
+						Self::resolve_auction(auction_id, auction_data);
+					}
 				}
 			});
 		}
@@ -170,14 +171,8 @@ pub mod module {
 			// Get the account id
 			let id = ensure_signed(origin)?;
 
-			// Ensure role is customer.
-			T::RoleManager::ensure_role(&id, Role::Customer)?;
-
-			// check the NftIdState is Free
-			T::NftManager::ensure_nft_state(nft_id, NftState::Free)?;
-
 			// Check the Nft is belong to the origin
-			T::NftManager::ensure_nft_is_valid(&id, nft_id)?;
+			T::NftManager::ensure_nft_owner(&id, nft_id)?;
 
 			// Set the Auctions storage
 			let auction_id = Self::next_auction_id();
@@ -186,21 +181,13 @@ pub mod module {
 
 			Auctions::<T>::insert(
 				auction_id,
-				AuctionData {
-					nft_id,
-					owner: id.clone(),
-					start,
-					reserve,
-					buy_now,
-					expiry_block,
-					current_bid: None,
-				},
+				AuctionData { nft_id, start, reserve, buy_now, expiry_block, current_bid: None },
 			);
 
 			// Append the auction id to the AuctionsExpiryBlock storage.
 			AuctionsExpiryBlock::<T>::append(expiry_block, auction_id);
 
-			// Change Nft state to auction.
+			// Ensure the nft state is free, then change Nft state to auction.
 			T::NftManager::change_nft_state(nft_id, NftState::Auction(auction_id))?;
 
 			// Pay fee.
@@ -215,13 +202,10 @@ pub mod module {
 		pub fn bid(
 			origin: OriginFor<T>,
 			auction_id: AuctionId,
-			price: T::Balance,
+			new_price: T::Balance,
 		) -> DispatchResult {
-			// Get the account id
-			let id = ensure_signed(origin)?;
-
-			// Ensure role is customer.
-			T::RoleManager::ensure_role(&id, Role::Customer)?;
+			// Get the new bidder account id
+			let new_bidder = ensure_signed(origin)?;
 
 			// update storage auctions
 			Auctions::<T>::try_mutate(auction_id, |maybe_auction_data| {
@@ -243,36 +227,34 @@ pub mod module {
 
 					// Ensure bid is valid.
 					ensure!(
-						price >= current_price + T::MinimumIncrease::get(),
+						new_price >= current_price + T::MinimumIncrease::get(),
 						Error::<T>::BidPriceTooLow
 					);
 
 					// Transfer bid to Bids Pool's account.
-					T::Bank::transfer(&id, &T::BidsPoolAccount::get(), price)?;
+					T::Bank::transfer(&new_bidder, &T::BidsPoolAccount::get(), new_price)?;
 
 					// Update current bid's storage.
-					auction_data.current_bid = Some((id.clone(), price));
+					auction_data.current_bid = Some((new_bidder.clone(), new_price));
 
 					// Calculate how many blocks the auction will over, if it shorter than specific
 					// length, then extend to specific length.
-					if T::ExtendedLength::get() >
-						auction_data.expiry_block -
-							frame_system::Pallet::<T>::current_block_number()
-					{
-						// Remove the old auction id
-						AuctionsExpiryBlock::<T>::mutate(auction_data.expiry_block, |auctions| {
-							auctions.retain(|id| *id != auction_id);
-						});
+					let new_expiry = frame_system::Pallet::<T>::current_block_number()
+						.saturating_add(T::ExtendedLength::get());
 
-						let new_expiry = frame_system::Pallet::<T>::current_block_number()
-							.saturating_add(T::ExtendedLength::get());
+					if new_expiry > auction_data.expiry_block {
+						// The old auction id will be handled at on-finalize.
 						auction_data.expiry_block = new_expiry;
 
 						// Add the new block number to the storage.
 						AuctionsExpiryBlock::<T>::append(new_expiry, auction_id);
 					}
 
-					Self::deposit_event(Event::<T>::Bid { who: id, auction_id, price });
+					Self::deposit_event(Event::<T>::BidRegistered {
+						new_bidder,
+						auction_id,
+						new_price,
+					});
 
 					Ok(())
 				} else {
@@ -287,33 +269,7 @@ pub mod module {
 			// Get the account id
 			let id = ensure_signed(origin)?;
 
-			// Ensure role is customer.
-			T::RoleManager::ensure_role(&id, Role::Customer)?;
-
-			// todo read the storage auctions
-			let auction_data =
-				Auctions::<T>::get(auction_id).ok_or(Error::<T>::InvalidAuctionId)?;
-
-			// Ensure the nft is belong to the correct owner.
-			T::NftManager::ensure_nft_is_valid(&id, auction_data.nft_id)?;
-
-			// Compare whether current price is upon the reserve price.
-			if let Some((bider, price)) = auction_data.current_bid {
-				if price >= auction_data.reserve.unwrap_or_default() {
-					return Err(Error::<T>::AuctionCancelFailed.into());
-				} else {
-					// Transfer back the money to the bider.
-					T::Bank::transfer(&T::BidsPoolAccount::get(), &bider, price)?;
-				}
-			}
-			// Changer the Nft state to free.
-			T::NftManager::change_nft_state(auction_data.nft_id, NftState::Free)?;
-			// Remove the auction from storage Auctions.
-			Auctions::<T>::remove(auction_id);
-
-			Self::deposit_event(Event::<T>::AuctionCanceled { auction_id });
-
-			Ok(())
+			Self::do_cancel_auction(auction_id, Some(&id))
 		}
 	}
 
@@ -335,12 +291,13 @@ pub mod module {
 					// transfer money
 					let tax = T::AuctionSuccessFeePercentage::get() * price;
 					let rest = price.saturating_sub(tax);
-					let _ = T::Bank::transfer(&bid_pool, &auction_data.owner, rest);
 					if let Ok(treasury) = T::Bank::treasury() {
 						let _ = T::Bank::transfer(&bid_pool, &treasury, tax);
 					}
-					// nft change owner
-					let _ = T::NftManager::nft_transfer(auction_data.nft_id, &bider);
+					// nft change owner, every Nft must have an owner, so that it must be ok.
+					if let Ok(owner) = T::NftManager::nft_transfer(auction_data.nft_id, &bider) {
+						let _ = T::Bank::transfer(&bid_pool, &owner, rest);
+					}
 					Self::deposit_event(Event::<T>::AuctionSucceeded {
 						auction_id,
 						to: bider,
@@ -359,16 +316,40 @@ pub mod module {
 			// nft change state
 			let _ = T::NftManager::change_nft_state(auction_data.nft_id, NftState::Free);
 		}
+
+		fn do_cancel_auction(auction_id: AuctionId, id: Option<&T::AccountId>) -> DispatchResult {
+			// Read the storage auctions, remove the auction id and return money to bidder.
+
+			if let Some(auction_data) = Auctions::<T>::take(auction_id) {
+				// If force cancel the id is none, only normal cancel will check owner of nft.
+				if let Some(owner) = id {
+					T::NftManager::ensure_nft_owner(owner, auction_data.nft_id)?;
+				}
+
+				// Only normal cancel will compare whether current price is upon the reserve price.
+				if let Some((bider, price)) = auction_data.current_bid {
+					if id.is_some() && price >= auction_data.reserve.unwrap_or_default() {
+						Err(Error::<T>::CannotCancelAuction.into())
+					} else {
+						// Transfer back the money to the bider.
+						T::Bank::transfer(&T::BidsPoolAccount::get(), &bider, price)
+					}?
+				}
+				// Changer the Nft state to free.
+				T::NftManager::change_nft_state(auction_data.nft_id, NftState::Free)
+			} else {
+				Err(Error::<T>::InvalidAuctionId.into())
+			}?;
+
+			Self::deposit_event(Event::<T>::AuctionCanceled { auction_id });
+
+			Ok(())
+		}
 	}
 
 	impl<T: Config> ManageAuctions<T::AccountId> for Pallet<T> {
 		fn force_cancel(auction_id: AuctionId) -> DispatchResult {
-			if let Some(auction_data) = Auctions::<T>::take(auction_id) {
-				if let Some((bider, price)) = auction_data.current_bid {
-					T::Bank::transfer(&T::BidsPoolAccount::get(), &bider, price)?;
-				}
-			}
-			Ok(())
+			Self::do_cancel_auction(auction_id, None)
 		}
 	}
 }

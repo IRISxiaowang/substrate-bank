@@ -40,7 +40,7 @@ pub trait Stakable<AccountId, Balance> {
 /// A trait for Nft operations like request mint, burn, transfer and approve.
 pub trait ManageNfts<AccountId> {
 	fn nft_transfer(nft_id: NftId, to_user: &AccountId) -> Result<AccountId, DispatchError>;
-	fn ensure_nft_is_valid(id: &AccountId, nft_id: NftId) -> DispatchResult;
+	fn ensure_nft_owner(id: &AccountId, nft_id: NftId) -> DispatchResult;
 	fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 	fn change_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 }
