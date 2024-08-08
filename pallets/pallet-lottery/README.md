@@ -1,3 +1,3 @@
-# AccountRole module
+# Lottery module
 
 ## Overview

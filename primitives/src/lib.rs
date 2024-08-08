@@ -44,6 +44,7 @@ pub enum Role {
 pub enum NftState {
 	Free,
 	POD(PodId),
+	Auction(AuctionId),
 }
 
 /// Enum representing the different state that an Nft can have.
@@ -116,6 +117,9 @@ pub type NftId = u32;
 
 /// Pod Id
 pub type PodId = u32;
+
+/// Auction Id
+pub type AuctionId = u32;
 
 /// Contains information on a Nft that is currently in PoD (Paid On Delivery)
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Serialize, Deserialize)]

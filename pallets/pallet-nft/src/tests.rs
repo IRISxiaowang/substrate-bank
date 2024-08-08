@@ -438,7 +438,7 @@ fn test_error_nft_state_not_match() {
 
 		assert_noop!(
 			Nft::create_pod(RuntimeOrigin::signed(ALICE), BOB, nft_id, DOLLAR),
-			Error::<Runtime>::NftStateNotMatch
+			Error::<Runtime>::NftStateNotFree
 		);
 	});
 }
