@@ -8,6 +8,8 @@ use primitives::{AuctionId, NftId, NftState, Role};
 
 use sp_std::marker::PhantomData;
 
+use sp_std::vec::Vec;
+
 /// Trait for managing user roles.
 pub trait ManageRoles<AccountId> {
 	/// Get the role of a given user.
@@ -43,6 +45,9 @@ pub trait ManageNfts<AccountId> {
 	fn ensure_nft_owner(id: &AccountId, nft_id: NftId) -> DispatchResult;
 	fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 	fn change_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_nft(nft_id: NftId, owner: AccountId, file_name: Vec<u8>, data: Vec<u8>);
 }
 
 /// A trait for Auction operations like force cancel.

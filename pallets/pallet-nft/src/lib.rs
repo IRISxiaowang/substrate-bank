@@ -529,5 +529,11 @@ pub mod module {
 				}
 			})
 		}
+
+		#[cfg(feature = "runtime-benchmarks")]
+		fn insert_nft(nft_id: NftId, owner: T::AccountId, file_name: Vec<u8>, data: Vec<u8>) {
+			Nfts::<T>::insert(nft_id, NftData { data, file_name, state: NftState::Free });
+			Owners::<T>::insert(nft_id, owner);
+		}
 	}
 }
