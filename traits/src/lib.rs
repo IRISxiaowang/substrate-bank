@@ -4,9 +4,11 @@
 
 use sp_runtime::{DispatchError, DispatchResult};
 
-use primitives::{NftId, NftState, Role};
+use primitives::{AuctionId, NftId, NftState, Role};
 
 use sp_std::marker::PhantomData;
+
+use sp_std::vec::Vec;
 
 /// Trait for managing user roles.
 pub trait ManageRoles<AccountId> {
@@ -40,9 +42,17 @@ pub trait Stakable<AccountId, Balance> {
 /// A trait for Nft operations like request mint, burn, transfer and approve.
 pub trait ManageNfts<AccountId> {
 	fn nft_transfer(nft_id: NftId, to_user: &AccountId) -> Result<AccountId, DispatchError>;
-	fn ensure_nft_is_valid(id: &AccountId, nft_id: NftId) -> DispatchResult;
+	fn ensure_nft_owner(id: &AccountId, nft_id: NftId) -> DispatchResult;
 	fn ensure_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
 	fn change_nft_state(nft_id: NftId, state: NftState) -> DispatchResult;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn insert_nft(nft_id: NftId, owner: AccountId, file_name: Vec<u8>, data: Vec<u8>);
+}
+
+/// A trait for Auction operations like force cancel.
+pub trait ManageAuctions<AccountId> {
+	fn force_cancel(auction_id: AuctionId) -> DispatchResult;
 }
 
 /// A trait for getting the treasury account.

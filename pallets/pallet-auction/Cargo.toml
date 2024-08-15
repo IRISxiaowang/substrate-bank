@@ -1,0 +1,62 @@
+[package]
+name = 'pallet-auction'
+version = '0.1.0'
+authors = ['Iris xiao Wang iris.xiaowang@gmail.com']
+description = ''
+edition = '2021'
+license = '<TODO>'
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["max-encoded-len"] }
+scale-info = { version = "2.1.2", default-features = false, features = ["derive"] }
+serde = { version = "1.0.136", optional = true }
+
+frame-support = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+frame-system = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+frame-benchmarking = { default-features = false, optional = true, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.6.0" }
+
+sp-arithmetic = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+sp-std = { git = "https://github.com/paritytech/polkadot-sdk", default-features = false , branch = "release-polkadot-v1.6.0" }
+
+primitives = { path = "../../primitives", default-features = false }
+traits = { path = "../../traits", default-features = false }
+
+[dev-dependencies]
+sp-io = { git = "https://github.com/paritytech/polkadot-sdk", branch = "release-polkadot-v1.6.0" }
+pallet-roles = { path = "../pallet-roles"}
+pallet-nft = { path = "../pallet-nft"}
+
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"scale-info/std",
+	"serde",
+
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
+	"sp-arithmetic/std",
+	"sp-runtime/std",
+	"sp-std/std",
+
+	"primitives/std",
+	"traits/std",
+]
+runtime-benchmarks = [
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"traits/runtime-benchmarks",
+]
+try-runtime = [
+	"frame-system/try-runtime",
+	"frame-support/try-runtime",
+]

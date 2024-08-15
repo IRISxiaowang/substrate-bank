@@ -47,7 +47,7 @@ pub use sp_runtime::{Perbill, Permill};
 
 use primitives::{
 	AccountId, Balance, BlockNumber, Hash, LockId, Nonce, PendingNftPods, RpcNftData, Signature,
-	DAY, DOLLAR, SLOT_DURATION, YEAR,
+	DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
 };
 
 pub mod runtime_api;
@@ -290,6 +290,28 @@ impl pallet_nft::Config for Runtime {
 	type PodFee = ConstU128<DOLLAR>;
 	type NftLockedPeriod = ConstU32<DAY>;
 }
+
+parameter_types! {
+	pub BidsPoolAccount: AccountId = AccountId::from([0xEE; 32]);
+	pub AuctionSuccessFeePercentage: Percent = Percent::from_percent(10);
+	pub const AuctionLength: BlockNumber = DAY as BlockNumber;
+	pub const ExtendedLength: BlockNumber = HOUR as BlockNumber;
+}
+
+impl pallet_auction::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type RoleManager = Roles;
+	type Balance = Balance;
+	type Bank = Bank;
+	type NftManager = Nft;
+	type BidsPoolAccount = BidsPoolAccount;
+	type AuctionSuccessFeePercentage = AuctionSuccessFeePercentage;
+	type AuctionStartFee = ConstU128<DOLLAR>;
+	type MinimumIncrease = ConstU128<DOLLAR>;
+	type AuctionLength = AuctionLength;
+	type ExtendedLength = ExtendedLength;
+}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime {
@@ -307,6 +329,7 @@ construct_runtime!(
 		Lottery: pallet_lottery,
 		Governance: pallet_governance,
 		Nft: pallet_nft,
+		Auction: pallet_auction,
 	}
 );
 
@@ -366,6 +389,7 @@ mod benches {
 		[pallet_lottery, Lottery]
 		[pallet_governance, Governance]
 		[pallet_nft, Nft]
+		[pallet_auction, Auction]
 	);
 }
 

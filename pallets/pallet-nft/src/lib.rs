@@ -108,6 +108,8 @@ pub mod module {
 		IncorrectReceiver,
 		/// The nft state is not the required state.
 		NftStateNotMatch,
+		/// The nft state is not Free.
+		NftStateNotFree,
 	}
 
 	#[pallet::event]
@@ -227,7 +229,7 @@ pub mod module {
 			let id = ensure_signed(origin)?;
 
 			// Valid nft and owner
-			Self::ensure_nft_is_valid(&id, nft_id)?;
+			Self::ensure_nft_owner(&id, nft_id)?;
 
 			// Ensure the nft is enable to burn.
 			Self::ensure_nft_state(nft_id, NftState::Free)?;
@@ -256,7 +258,7 @@ pub mod module {
 			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
 
 			// Valid nft and owner
-			Self::ensure_nft_is_valid(&id, nft_id)?;
+			Self::ensure_nft_owner(&id, nft_id)?;
 
 			// Transfer Nft ownership to new user.
 			Owners::<T>::mutate(nft_id, |user| {
@@ -310,6 +312,11 @@ pub mod module {
 				if let NftState::POD(pod_id) = nft_data.state {
 					PendingPodNfts::<T>::remove(pod_id);
 				}
+				// todo
+				//if let NftState::POD(auction_id) = nft_data.state {
+				// create a trait manageAuctioin, with function remove auction
+				//	Auctions::<T>::remove(auction_id);
+				// transfer the money back to the bider }
 			}
 			Owners::<T>::remove(nft_id);
 
@@ -333,12 +340,11 @@ pub mod module {
 			T::RoleManager::ensure_not_role(&id, Role::Auditor)?;
 			T::RoleManager::ensure_role(&to_user, Role::Customer)?;
 
-			// Ensure the nft is enable to trade.
-			Self::ensure_nft_state(nft_id, NftState::Free)?;
 			// Ensure the nft is belong to the correct owner.
-			Self::ensure_nft_is_valid(&id, nft_id)?;
+			Self::ensure_nft_owner(&id, nft_id)?;
 			// Change nft state to POD.
 			let pod_id = Self::next_pod_id();
+			// Ensure the nft state is free, then changed to new state.
 			Self::change_nft_state(nft_id, NftState::POD(pod_id))?;
 
 			// Get treasury account.
@@ -438,7 +444,7 @@ pub mod module {
 			let pod_info = PendingPodNfts::<T>::get(pod_id).ok_or(Error::<T>::NftNotForPod)?;
 
 			// Ensure the nft is belong to the correct owner.
-			Self::ensure_nft_is_valid(&id, pod_info.nft_id)?;
+			Self::ensure_nft_owner(&id, pod_info.nft_id)?;
 			// Change nft state to POD.
 			Self::cancel_nft_pod(pod_id, pod_info.nft_id, CancelReason::Canceled)?;
 
@@ -482,7 +488,7 @@ pub mod module {
 
 			let owner = Owners::<T>::get(nft_id).ok_or(Error::<T>::InvalidNftId)?;
 			// Valid nft and owner
-			Self::ensure_nft_is_valid(&owner, nft_id)?;
+			Self::ensure_nft_owner(&owner, nft_id)?;
 
 			// Transfer Nft ownership to new user.
 			Owners::<T>::mutate(nft_id, |user| {
@@ -492,7 +498,7 @@ pub mod module {
 			Ok(owner)
 		}
 
-		fn ensure_nft_is_valid(id: &T::AccountId, nft_id: NftId) -> DispatchResult {
+		fn ensure_nft_owner(id: &T::AccountId, nft_id: NftId) -> DispatchResult {
 			// Ensure the NftId is valid.
 			ensure!(Nfts::<T>::get(nft_id) != None, Error::<T>::InvalidNftId);
 
@@ -513,12 +519,21 @@ pub mod module {
 		fn change_nft_state(nft_id: NftId, new_state: NftState) -> DispatchResult {
 			Nfts::<T>::mutate_exists(nft_id, |maybe_nft_data| {
 				if let Some(nft_data) = maybe_nft_data {
+					if new_state != NftState::Free {
+						ensure!(nft_data.state == NftState::Free, Error::<T>::NftStateNotFree);
+					}
 					nft_data.state = new_state;
 					Ok(())
 				} else {
 					Err(Error::<T>::InvalidNftId.into())
 				}
 			})
+		}
+
+		#[cfg(feature = "runtime-benchmarks")]
+		fn insert_nft(nft_id: NftId, owner: T::AccountId, file_name: Vec<u8>, data: Vec<u8>) {
+			Nfts::<T>::insert(nft_id, NftData { data, file_name, state: NftState::Free });
+			Owners::<T>::insert(nft_id, owner);
 		}
 	}
 }
