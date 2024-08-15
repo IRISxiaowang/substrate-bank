@@ -193,14 +193,55 @@ fn can_bid_buy_now() {
 
 		assert_ok!(Nft::ensure_nft_owner(&BOB, 1u32));
 
-		assert_eq!(TransferHistory::get()[0], (BIDS_POOL_ACCOUNT, TREASURY, 2 * DOLLAR));
-		assert_eq!(TransferHistory::get()[1], (BIDS_POOL_ACCOUNT, ALICE, 18 * DOLLAR));
+		assert_eq!(TransferHistory::get()[0], (BOB, BIDS_POOL_ACCOUNT, 20 * DOLLAR));
+		assert_eq!(TransferHistory::get()[1], (BIDS_POOL_ACCOUNT, TREASURY, 2 * DOLLAR));
+		assert_eq!(TransferHistory::get()[2], (BIDS_POOL_ACCOUNT, ALICE, 18 * DOLLAR));
 
 		System::assert_last_event(RuntimeEvent::Auction(Event::<Runtime>::AuctionSucceeded {
 			auction_id: 1u32,
 			to: BOB,
 			asset: 1u32,
 			price: 20 * DOLLAR,
+		}));
+	});
+}
+
+#[test]
+fn can_extend_bid() {
+	default_test_ext().execute_with(|| {
+		Auctions::<Runtime>::insert(
+			1u32,
+			AuctionData {
+				nft_id: 1u32,
+				start: Some(100u128),
+				reserve: Some(10 * DOLLAR),
+				buy_now: Some(20 * DOLLAR),
+				expiry_block: 100,
+				current_bid: None,
+			},
+		);
+
+		System::set_block_number(99);
+
+		assert_ok!(Auction::bid(RuntimeOrigin::signed(BOB), 1u32, 10 * DOLLAR));
+
+		assert_eq!(Auctions::<Runtime>::get(1).unwrap().expiry_block, 109);
+		assert_eq!(AuctionsExpiryBlock::<Runtime>::get(109), vec![1u32]);
+
+		System::set_block_number(105);
+		assert_ok!(Auction::bid(RuntimeOrigin::signed(BOB), 1u32, 15 * DOLLAR));
+
+		assert_eq!(Auctions::<Runtime>::get(1).unwrap().expiry_block, 115);
+		assert_eq!(AuctionsExpiryBlock::<Runtime>::get(115), vec![1u32]);
+
+		assert_eq!(TransferHistory::get()[0], (BOB, BIDS_POOL_ACCOUNT, 10 * DOLLAR));
+		assert_eq!(TransferHistory::get()[1], (BIDS_POOL_ACCOUNT, BOB, 10 * DOLLAR));
+		assert_eq!(TransferHistory::get()[2], (BOB, BIDS_POOL_ACCOUNT, 15 * DOLLAR));
+
+		System::assert_last_event(RuntimeEvent::Auction(Event::<Runtime>::BidRegistered {
+			new_bidder: BOB,
+			auction_id: 1u32,
+			new_price: 15 * DOLLAR,
 		}));
 	});
 }

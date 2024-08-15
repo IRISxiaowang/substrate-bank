@@ -224,6 +224,9 @@ pub mod module {
 				});
 				// When the bid price is greater than Buy now, the auction is end.
 				if new_price >= auction_data.buy_now.unwrap_or_default() {
+					// Transfer bid to Bids Pool's account.
+					T::Bank::transfer(&new_bidder, &T::BidsPoolAccount::get(), new_price)?;
+
 					Self::complete_auction(new_bidder, new_price, auction_id, auction_data.nft_id);
 					// nft change state
 					T::NftManager::change_nft_state(auction_data.nft_id, NftState::Free)?;
