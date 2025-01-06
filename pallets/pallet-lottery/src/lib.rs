@@ -55,8 +55,6 @@ pub mod module {
 
 		type Bank: BasicAccounting<Self::AccountId, Self::Balance> + GetTreasury<Self::AccountId>;
 
-		type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
-
 		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
@@ -223,7 +221,7 @@ pub mod module {
 			// ensure governance
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			StartBlock::<T>::set(T::BlockNumberProvider::current_block_number());
+			StartBlock::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
 			Ok(())
 		}

@@ -226,7 +226,6 @@ impl pallet_bank::Config for Runtime {
 	type WeightInfo = pallet_bank::weights::SubstrateWeight<Runtime>;
 	type Balance = Balance;
 	type RoleManager = Roles;
-	type BlockNumberProvider = System;
 	type EnsureGovernance = pallet_governance::EnsureGovernance;
 	type ExistentialDeposit = ConstU128<DOLLAR>;
 	type MinimumAmount = MinimumAmount;
@@ -254,7 +253,6 @@ impl pallet_lottery::Config for Runtime {
 	type WeightInfo = pallet_lottery::weights::SubstrateWeight<Runtime>;
 	type Balance = Balance;
 	type RoleManager = Roles;
-	type BlockNumberProvider = System;
 	type EnsureGovernance = pallet_governance::EnsureGovernance;
 	type Bank = Bank;
 	type Randomness = Random;
@@ -271,7 +269,6 @@ parameter_types! {
 impl pallet_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
-	type BlockNumberProvider = System;
 	type ExpiryPeriod = ExpiryPeriod;
 	type MajorityThreshold = MajorityThreshold;
 	type RuntimeOrigin = RuntimeOrigin;

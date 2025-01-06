@@ -122,8 +122,6 @@ pub mod module {
 			+ From<Call<Self>>
 			+ GetDispatchInfo;
 
-		type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
-
 		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		#[pallet::constant]
@@ -291,7 +289,7 @@ pub mod module {
 			ensure!(CurrentAuthorities::<T>::get().contains(&id), Error::<T>::Unauthorized);
 			let proposal_id = Self::next_proposal_id();
 			let expired_block =
-				T::BlockNumberProvider::current_block_number() + T::ExpiryPeriod::get();
+				frame_system::Pallet::<T>::current_block_number() + T::ExpiryPeriod::get();
 
 			// add call to storage
 			Proposals::<T>::insert(proposal_id, call.encode());
@@ -443,7 +441,7 @@ pub mod module {
 					init.append(&mut expiry_set);
 					init
 				});
-			let expired_block = T::BlockNumberProvider::current_block_number()
+			let expired_block = frame_system::Pallet::<T>::current_block_number()
 				.saturating_add(T::ExpiryPeriod::get());
 
 			Expiry::<T>::insert(expired_block, all_proposals);

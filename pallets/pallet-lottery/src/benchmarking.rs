@@ -68,7 +68,7 @@ mod benchmarks {
 		}
 
 		// Verify
-		assert_eq!(StartBlock::<T>::get(), T::BlockNumberProvider::current_block_number());
+		assert_eq!(StartBlock::<T>::get(), frame_system::Pallet::<T>::current_block_number());
 	}
 	impl_benchmark_test_suite!(Pallet, crate::mock::default_test_ext(), crate::mock::Runtime);
 }
