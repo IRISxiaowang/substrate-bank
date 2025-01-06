@@ -116,8 +116,6 @@ pub use module::*;
 #[frame_support::pallet]
 pub mod module {
 
-	use sp_runtime::traits::BlockNumberProvider;
-
 	use super::*;
 
 	#[pallet::config]
@@ -140,8 +138,6 @@ pub mod module {
 			+ sp_std::iter::Sum;
 
 		type RoleManager: ManageRoles<Self::AccountId>;
-
-		type BlockNumberProvider: BlockNumberProvider<BlockNumber = BlockNumberFor<Self>>;
 
 		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
@@ -431,7 +427,7 @@ pub mod module {
 			// Ensure the user is a customer to be locked
 			T::RoleManager::ensure_role(&user, Role::Customer)?;
 			// Implement logic to lock funds from free and reserved
-			let unlock = T::BlockNumberProvider::current_block_number() + length;
+			let unlock = frame_system::Pallet::<T>::current_block_number() + length;
 
 			Accounts::<T>::mutate(&user, |account_data| {
 				ensure!(
@@ -605,7 +601,7 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 				LockedFund { id: Self::next_lock_id(), amount, reason: LockReason::Stake };
 			account.locked.push(new_locked_fund);
 
-			let unlock = T::BlockNumberProvider::current_block_number() + T::StakePeriod::get();
+			let unlock = frame_system::Pallet::<T>::current_block_number() + T::StakePeriod::get();
 			AccountWithUnlockedFund::<T>::append(unlock, (user.clone(), new_locked_fund.id));
 
 			Ok(())
@@ -626,7 +622,7 @@ impl<T: Config> Stakable<T::AccountId, T::Balance> for Pallet<T> {
 		ensure!(amount >= T::MinimumAmount::get(), Error::<T>::AmountTooSmall);
 
 		// get unlock BlockNumber
-		let unlock = T::BlockNumberProvider::current_block_number() + T::RedeemPeriod::get();
+		let unlock = frame_system::Pallet::<T>::current_block_number() + T::RedeemPeriod::get();
 
 		// Add new locked funds to user's Account Data
 		Accounts::<T>::mutate(user, |account| -> DispatchResult {

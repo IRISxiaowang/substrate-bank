@@ -86,7 +86,6 @@ impl Config for Runtime {
 	type WeightInfo = ();
 	type Balance = Balance;
 	type RoleManager = Roles;
-	type BlockNumberProvider = System;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type Bank = Bank;
 	type Randomness = MockRandom;
@@ -109,7 +108,6 @@ impl pallet_bank::Config for Runtime {
 	type WeightInfo = ();
 	type Balance = Balance;
 	type RoleManager = Roles;
-	type BlockNumberProvider = System;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type ExistentialDeposit = ExistentialDeposit;
 	type MinimumAmount = MinimumAmount;

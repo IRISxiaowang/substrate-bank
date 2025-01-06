@@ -53,7 +53,6 @@ parameter_types! {
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
-	type BlockNumberProvider = System;
 	type ExpiryPeriod = ExpiryPeriod;
 	type MajorityThreshold = MajorityThreshold;
 	type RuntimeOrigin = RuntimeOrigin;
