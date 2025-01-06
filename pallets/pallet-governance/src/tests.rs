@@ -12,7 +12,8 @@ fn assert_storage_cleaned_up(first_proposal: ProposalId) {
 
 #[test]
 fn can_initiate_proposal() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Verify the authorities are set.
@@ -55,7 +56,8 @@ fn can_initiate_proposal() {
 
 #[test]
 fn cannot_initiate_proposal_with_invaild_authority() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Verify the authorities are set.
@@ -79,7 +81,8 @@ fn cannot_initiate_proposal_with_invaild_authority() {
 
 #[test]
 fn can_vote() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data.
@@ -175,7 +178,8 @@ fn can_vote() {
 
 #[test]
 fn cannot_vote_with_invalid_authority() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data.
@@ -200,7 +204,8 @@ fn cannot_vote_with_invalid_authority() {
 
 #[test]
 fn cannot_vote_with_invalid_proposal() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data.
@@ -222,7 +227,8 @@ fn cannot_vote_with_invalid_proposal() {
 
 #[test]
 fn cannot_vote_twice() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data.
@@ -262,7 +268,8 @@ fn cannot_vote_twice() {
 
 #[test]
 fn cannot_vote_after_proposal_resolved() {
-	MockGenesisConfig::with_authorities((11..22).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..22).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data.
@@ -332,7 +339,8 @@ fn can_force_rotate_authorities() {
 
 #[test]
 fn can_council_rotate_authorities() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data
@@ -378,7 +386,8 @@ fn can_council_rotate_authorities() {
 
 #[test]
 fn can_expired_council_rotate_authorities() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data
@@ -420,7 +429,8 @@ fn can_expired_council_rotate_authorities() {
 
 #[test]
 fn can_reject_council_rotate_authorities() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data
@@ -460,39 +470,43 @@ fn can_reject_council_rotate_authorities() {
 
 #[test]
 fn can_resolve_after_proposal() {
-	MockGenesisConfig::with_authorities(vec![11]).build().execute_with(|| {
-		let call = Box::new(RuntimeCall::Governance(crate::Call::council_rotate_authorities {
-			new_members: (21..31).collect::<Vec<_>>(),
-		}));
-		let authority_member: AccountId = 11;
-		let first_proposal = 1u32;
+	MockGenesisConfig::default()
+		.with_authorities(vec![11])
+		.build()
+		.execute_with(|| {
+			let call = Box::new(RuntimeCall::Governance(crate::Call::council_rotate_authorities {
+				new_members: (21..31).collect::<Vec<_>>(),
+			}));
+			let authority_member: AccountId = 11;
+			let first_proposal = 1u32;
 
-		// Asserts that initiating a proposal with the specified origin and call is successful.
-		assert_ok!(Governance::initiate_proposal(
-			RuntimeOrigin::signed(authority_member),
-			call.clone()
-		));
+			// Asserts that initiating a proposal with the specified origin and call is successful.
+			assert_ok!(Governance::initiate_proposal(
+				RuntimeOrigin::signed(authority_member),
+				call.clone()
+			));
 
-		// Dispatch
-		Governance::on_finalize(System::block_number());
+			// Dispatch
+			Governance::on_finalize(System::block_number());
 
-		// Verify the authorities are set.
-		assert_eq!(CurrentAuthorities::<Runtime>::get(), (21..31).collect::<BTreeSet<_>>());
+			// Verify the authorities are set.
+			assert_eq!(CurrentAuthorities::<Runtime>::get(), (21..31).collect::<BTreeSet<_>>());
 
-		assert_storage_cleaned_up(first_proposal);
+			assert_storage_cleaned_up(first_proposal);
 
-		let last_event = System::events().last().unwrap().event.clone();
-		matches!(last_event, RuntimeEvent::Governance(Event::<Runtime>::ProposalPassed {
+			let last_event = System::events().last().unwrap().event.clone();
+			matches!(last_event, RuntimeEvent::Governance(Event::<Runtime>::ProposalPassed {
 			id,
 			call,
 			result: Ok(..),
 		}) if id == first_proposal && call == call );
-	});
+		});
 }
 
 #[test]
 fn rotate_authorities_can_retain_votes() {
-	MockGenesisConfig::with_authorities((11..21).collect::<Vec<_>>())
+	MockGenesisConfig::default()
+		.with_authorities((11..21).collect::<Vec<_>>())
 		.build()
 		.execute_with(|| {
 			// Setup data

@@ -101,8 +101,9 @@ pub struct MockGenesisConfig {
 }
 
 impl MockGenesisConfig {
-	pub fn with_balances(balances: Vec<(AccountId, Balance, Balance)>) -> Self {
-		Self { balances }
+	pub fn with_balances(mut self, balances: Vec<(AccountId, Balance, Balance)>) -> Self {
+		self.balances = balances;
+		self
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
