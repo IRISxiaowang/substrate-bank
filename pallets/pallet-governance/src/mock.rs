@@ -74,8 +74,9 @@ pub struct MockGenesisConfig {
 }
 
 impl MockGenesisConfig {
-	pub fn with_authorities(authorities: Vec<AccountId>) -> Self {
-		Self { authorities }
+	pub fn with_authorities(mut self, authorities: Vec<AccountId>) -> Self {
+		self.authorities = authorities;
+		self
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {

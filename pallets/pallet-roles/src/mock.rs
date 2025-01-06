@@ -67,8 +67,9 @@ pub struct MockGenesisConfig {
 }
 
 impl MockGenesisConfig {
-	pub fn with_roles(roles: Vec<(AccountId, Role)>) -> Self {
-		Self { roles }
+	pub fn with_roles(mut self, roles: Vec<(AccountId, Role)>) -> Self {
+		self.roles = roles;
+		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let config = RuntimeGenesisConfig {

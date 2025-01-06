@@ -95,7 +95,8 @@ fn test_ensure_not_role() {
 
 #[test]
 fn can_bulid() {
-	MockGenesisConfig::with_roles(vec![(ALICE, Role::Manager), (BOB, Role::Customer)])
+	MockGenesisConfig::default()
+		.with_roles(vec![(ALICE, Role::Manager), (BOB, Role::Customer)])
 		.build()
 		.execute_with(|| {
 			assert_eq!(AccountRoles::<Runtime>::get(ALICE), Some(Role::Manager));

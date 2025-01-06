@@ -56,7 +56,8 @@ fn can_deposit() {
 		assert!(Bank::check_total_issuance());
 	});
 
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000_000, 0), (BOB, 50, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000_000, 0), (BOB, 50, 0)])
 		.build()
 		.execute_with(|| {
 			assert_eq!(Accounts::<Runtime>::get(ALICE).free, 1_000_000);
@@ -66,31 +67,35 @@ fn can_deposit() {
 
 #[test]
 fn can_withdraw() {
-	MockGenesisConfig::with_balances(vec![(BOB, 500, 0)]).build().execute_with(|| {
-		assert_ok!(Roles::register_role(&ALICE, Role::Manager));
-		assert_eq!(Accounts::<Runtime>::get(BOB).free, 500);
-		System::reset_events();
-		assert_ok!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 100));
-		System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Withdrew {
-			user: BOB,
-			amount: 100,
-		}));
-		assert_eq!(Accounts::<Runtime>::get(BOB).free, 400);
-		assert_noop!(
-			Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 500),
-			Error::<Runtime>::InsufficientBalance
-		);
-		assert_noop!(
-			Bank::withdraw(RuntimeOrigin::signed(ALICE), ALICE, 500),
-			pallet_roles::Error::<Runtime>::IncorrectRole
-		);
-		assert!(Bank::check_total_issuance());
-	});
+	MockGenesisConfig::default()
+		.with_balances(vec![(BOB, 500, 0)])
+		.build()
+		.execute_with(|| {
+			assert_ok!(Roles::register_role(&ALICE, Role::Manager));
+			assert_eq!(Accounts::<Runtime>::get(BOB).free, 500);
+			System::reset_events();
+			assert_ok!(Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 100));
+			System::assert_last_event(RuntimeEvent::Bank(Event::<Runtime>::Withdrew {
+				user: BOB,
+				amount: 100,
+			}));
+			assert_eq!(Accounts::<Runtime>::get(BOB).free, 400);
+			assert_noop!(
+				Bank::withdraw(RuntimeOrigin::signed(ALICE), BOB, 500),
+				Error::<Runtime>::InsufficientBalance
+			);
+			assert_noop!(
+				Bank::withdraw(RuntimeOrigin::signed(ALICE), ALICE, 500),
+				pallet_roles::Error::<Runtime>::IncorrectRole
+			);
+			assert!(Bank::check_total_issuance());
+		});
 }
 
 #[test]
 fn can_transfer() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0), (BOB, 500, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0), (BOB, 500, 0)])
 		.build()
 		.execute_with(|| {
 			System::reset_events();
@@ -218,7 +223,8 @@ fn cannot_reap_accounts_without_setting_treasury_account() {
 
 #[test]
 fn can_stake_funds() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			System::reset_events();
@@ -241,7 +247,8 @@ fn can_stake_funds() {
 
 #[test]
 fn can_redeem_funds() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			stake(ALICE, 1_000);
@@ -273,7 +280,8 @@ fn can_redeem_funds() {
 
 #[test]
 fn auditor_can_lock_funds() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -308,7 +316,8 @@ fn auditor_can_lock_funds() {
 
 #[test]
 fn auditor_can_unlock_funds() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -358,7 +367,8 @@ fn auditor_can_unlock_funds() {
 
 #[test]
 fn incorrect_role_cannot_call_auditor_function() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -404,7 +414,8 @@ fn incorrect_role_cannot_call_auditor_function() {
 
 #[test]
 fn auditor_cannot_unlock_invalid_id() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -418,7 +429,8 @@ fn auditor_cannot_unlock_invalid_id() {
 
 #[test]
 fn manager_can_set_interest_rate() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -435,7 +447,8 @@ fn manager_can_set_interest_rate() {
 
 #[test]
 fn incorrect_role_cannot_set_interest_rate() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -454,7 +467,8 @@ fn incorrect_role_cannot_set_interest_rate() {
 
 #[test]
 fn pay_interest() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000_000_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000_000_000, 0)])
 		.build()
 		.execute_with(|| {
 			let charlie: AccountId = 3u32;
@@ -476,7 +490,8 @@ fn pay_interest() {
 
 #[test]
 fn can_rotate_treasury() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 100, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 100, 0)])
 		.build()
 		.execute_with(|| {
 			// Setup old treasury account and data
@@ -517,7 +532,8 @@ fn can_rotate_treasury() {
 
 #[test]
 fn can_rotate_treasury_without_setting_treasury() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 100, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 100, 0)])
 		.build()
 		.execute_with(|| {
 			let new_treasury = 10u32;
@@ -541,7 +557,8 @@ fn can_rotate_treasury_without_setting_treasury() {
 
 #[test]
 fn test_error_cases_in_rotating_treasury() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 100, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 100, 0)])
 		.build()
 		.execute_with(|| {
 			let new_treasury = 10u32;
@@ -563,7 +580,8 @@ fn test_error_cases_in_rotating_treasury() {
 
 #[test]
 fn funds_can_unlock_after_treasury_rotation() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			TreasuryAccount::<Runtime>::set(Some(TREASURY));
@@ -609,7 +627,8 @@ fn funds_can_unlock_after_treasury_rotation() {
 
 #[test]
 fn can_force_transfer() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0), (BOB, 500, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0), (BOB, 500, 0)])
 		.build()
 		.execute_with(|| {
 			System::reset_events();
@@ -634,7 +653,8 @@ fn can_force_transfer() {
 
 #[test]
 fn can_check_fund_unlock_at() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0), (BOB, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0), (BOB, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			// Check if it works with stake function.
@@ -677,7 +697,8 @@ fn can_check_fund_unlock_at() {
 
 #[test]
 fn can_calculate_interest_pa() {
-	MockGenesisConfig::with_balances(vec![(ALICE, 1_000, 0)])
+	MockGenesisConfig::default()
+		.with_balances(vec![(ALICE, 1_000, 0)])
 		.build()
 		.execute_with(|| {
 			let initial_balance: Balance = 1_000_000_000_000_000_000u128;

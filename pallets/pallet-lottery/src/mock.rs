@@ -140,12 +140,14 @@ pub struct MockGenesisConfig {
 }
 
 impl MockGenesisConfig {
-	pub fn with_lotteries(self, lotteries: Vec<(AccountId, u32)>) -> Self {
-		Self { balance: self.balance, lotteries }
+	pub fn with_lotteries(mut self, lotteries: Vec<(AccountId, u32)>) -> Self {
+		self.lotteries = lotteries;
+		self
 	}
 
-	pub fn with_balances(self, balance: Vec<(AccountId, Balance)>) -> Self {
-		Self { balance, lotteries: self.lotteries }
+	pub fn with_balances(mut self, balance: Vec<(AccountId, Balance)>) -> Self {
+		self.balance = balance;
+		self
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
