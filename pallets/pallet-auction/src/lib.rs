@@ -235,10 +235,10 @@ pub mod module {
 				} else {
 					let current_price = sp_std::cmp::max(
 						if let Some((_, last_price)) = &auction_data.current_bid {
-							Ok::<T::Balance, DispatchError>(*last_price)
+							*last_price
 						} else {
-							Ok(Default::default())
-						}?,
+							Default::default()
+						},
 						auction_data.start.unwrap_or_default(),
 					);
 
@@ -357,7 +357,7 @@ pub mod module {
 					if let Some((bider, price)) = auction_data.current_bid {
 						(cancel == CancelOption::Force ||
 							price < auction_data.reserve.unwrap_or_default())
-						.then(|| T::Bank::transfer(&T::BidsPoolAccount::get(), &bider, price))
+						.then_some(T::Bank::transfer(&T::BidsPoolAccount::get(), &bider, price))
 						.ok_or(Error::<T>::CannotCancelAuction)??;
 						// Transfer back the money to the bider.
 					}

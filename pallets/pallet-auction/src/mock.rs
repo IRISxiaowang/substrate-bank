@@ -124,6 +124,7 @@ impl pallet_nft::Config for Runtime {
 	type RoleManager = Roles;
 	type Balance = Balance;
 	type Bank = MockBank;
+	type AuctionManager = Auction;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type MaxSize = MaxSize;
 	type PodFee = Fee;

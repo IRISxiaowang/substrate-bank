@@ -8,7 +8,7 @@ use frame_support::{
 
 use sp_runtime::{testing::H256, traits::IdentityLookup, BuildStorage};
 
-use primitives::Balance;
+use primitives::{AuctionId, Balance};
 
 use crate as pallet_nft;
 
@@ -81,6 +81,17 @@ impl GetTreasury<AccountId> for MockBank {
 }
 
 parameter_types! {
+	pub static AuctionCanceled: AuctionId = Default::default();
+}
+pub struct MockAuction;
+impl ManageAuctions<AccountId> for MockAuction {
+	fn force_cancel(auction_id: AuctionId) -> DispatchResult {
+		AuctionCanceled::set(auction_id);
+		Ok(())
+	}
+}
+
+parameter_types! {
 	pub const MaxSize: u32 = MAX_SIZE;
 	pub const Fee: u128 = FEE;
 	pub const NftLockedPeriod: u64 = NFT_LOCKED_PERIOD;
@@ -93,6 +104,7 @@ impl Config for Runtime {
 	type RoleManager = Roles;
 	type Balance = Balance;
 	type Bank = MockBank;
+	type AuctionManager = MockAuction;
 	type EnsureGovernance = traits::SuccessOrigin<Runtime>;
 	type MaxSize = MaxSize;
 	type PodFee = Fee;
