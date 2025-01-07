@@ -15,7 +15,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 
 use primitives::{NftId, NftState, PodId, Response, Role, FILENAME_MAXSIZE};
-use traits::{BasicAccounting, GetTreasury, ManageNfts, ManageRoles};
+use traits::{BasicAccounting, GetTreasury, ManageAuctions, ManageNfts, ManageRoles};
 
 mod mock;
 mod tests;
@@ -78,6 +78,8 @@ pub mod module {
 		type RoleManager: ManageRoles<Self::AccountId>;
 
 		type Bank: BasicAccounting<Self::AccountId, Self::Balance> + GetTreasury<Self::AccountId>;
+
+		type AuctionManager: ManageAuctions<Self::AccountId>;
 
 		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
@@ -309,14 +311,11 @@ pub mod module {
 
 			// Remove storage
 			if let Some(nft_data) = Nfts::<T>::take(nft_id) {
-				if let NftState::POD(pod_id) = nft_data.state {
-					PendingPodNfts::<T>::remove(pod_id);
+				match nft_data.state {
+					NftState::Auction(auction_id) => T::AuctionManager::force_cancel(auction_id)?,
+					NftState::POD(pod_id) => PendingPodNfts::<T>::remove(pod_id),
+					NftState::Free => {},
 				}
-				// todo
-				//if let NftState::POD(auction_id) = nft_data.state {
-				// create a trait manageAuctioin, with function remove auction
-				//	Auctions::<T>::remove(auction_id);
-				// transfer the money back to the bider }
 			}
 			Owners::<T>::remove(nft_id);
 

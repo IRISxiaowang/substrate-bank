@@ -8,6 +8,7 @@ use primitives::{NftId, DOLLAR};
 fn set_up_nfts() {
 	let nft_id_1 = Nft::next_nft_id();
 	let nft_id_2 = Nft::next_nft_id();
+	let nft_id_3 = Nft::next_nft_id();
 
 	Nfts::<Runtime>::insert(
 		nft_id_1,
@@ -29,8 +30,21 @@ fn set_up_nfts() {
 			BOB,
 		),
 	);
+
+	Nfts::<Runtime>::insert(
+		nft_id_3,
+		NftData {
+			data: vec![0x4E, 0x46, 0x54],
+			file_name: vec![0x46, 0x49, 0x4C, 0x45],
+			state: NftState::Auction(1u32),
+		},
+	);
+	Owners::<Runtime>::insert(nft_id_3, ALICE);
+
 	assert!(Owners::<Runtime>::contains_key(nft_id_1));
 	assert!(Nfts::<Runtime>::contains_key(nft_id_1));
+	assert!(Owners::<Runtime>::contains_key(nft_id_3));
+	assert!(Nfts::<Runtime>::contains_key(nft_id_3));
 	assert!(PendingNft::<Runtime>::contains_key(nft_id_2));
 }
 
@@ -148,6 +162,20 @@ fn can_force_burn() {
 		assert!(!Nfts::<Runtime>::contains_key(1));
 
 		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftBurned { nft_id: 1u32 }));
+
+		// Check the nft 3 is exist with state auction.
+		assert!(Owners::<Runtime>::contains_key(3));
+		assert!(Nfts::<Runtime>::contains_key(3));
+
+		// Force burned by governance.
+		assert_ok!(Nft::force_burn(RuntimeOrigin::root(), 3u32));
+
+		// The nft 1 is deleted.
+		assert!(!Owners::<Runtime>::contains_key(3));
+		assert!(!Nfts::<Runtime>::contains_key(3));
+		assert_eq!(AuctionCanceled::get(), 1u32);
+
+		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftBurned { nft_id: 3u32 }));
 	});
 }
 
@@ -337,6 +365,7 @@ fn can_receive_pod() {
 		// The nft 1 is on pod.
 		assert_eq!(Owners::<Runtime>::get(nft_id), Some(BOB));
 		assert!(!PendingPodNfts::<Runtime>::contains_key(1));
+		assert_eq!(TransferHistory::get(), vec![(BOB, ALICE, 2 * DOLLAR)]);
 
 		System::assert_last_event(RuntimeEvent::Nft(Event::<Runtime>::NftDelivered {
 			seller: ALICE,

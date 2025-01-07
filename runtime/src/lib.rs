@@ -282,6 +282,7 @@ impl pallet_nft::Config for Runtime {
 	type RoleManager = Roles;
 	type Balance = Balance;
 	type Bank = Bank;
+	type AuctionManager = Auction;
 	type EnsureGovernance = pallet_governance::EnsureGovernance;
 	type MaxSize = ConstU32<1_048_576>; // 1MB
 	type PodFee = ConstU128<DOLLAR>;
