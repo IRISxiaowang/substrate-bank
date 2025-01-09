@@ -37,6 +37,8 @@ fn can_force_burn() {
 		// Set up an nft.
 		create_an_nft();
 
+		const BID: u128 = 7 * DOLLAR;
+
 		// Create an auction.
 		assert_ok!(Auction::create_auction(
 			Alice.sign(),
@@ -50,7 +52,7 @@ fn can_force_burn() {
 		assert!(pallet_auction::Auctions::<Runtime>::contains_key(1u32));
 
 		// Bob bid the auction.
-		assert_ok!(Auction::bid(Bob.sign(), 1u32, 7 * DOLLAR));
+		assert_ok!(Auction::bid(Bob.sign(), 1u32, BID));
 
 		// Check storage Auctions.
 		assert_eq!(
@@ -61,12 +63,12 @@ fn can_force_burn() {
 				reserve: Some(5 * DOLLAR),
 				buy_now: Some(10 * DOLLAR),
 				expiry_block: 1 + DAY,
-				current_bid: Some((Bob.account(), 7 * DOLLAR))
+				current_bid: Some((Bob.account(), BID))
 			})
 		);
 
 		// Check Bob balance minus 7 dollars for biding.
-		assert_balance(Bob.account(), INITIAL_BALANCE - 7 * DOLLAR);
+		assert_balance(Bob.account(), INITIAL_BALANCE - BID);
 
 		// Check Alice balance minus 1 dollar with start auction fee.
 		assert_balance(Alice.account(), INITIAL_BALANCE - DOLLAR);
