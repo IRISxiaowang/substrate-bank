@@ -46,8 +46,8 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 use primitives::{
-	AccountId, Balance, BlockNumber, Hash, LockId, Nonce, PendingNftPods, RpcNftData, Signature,
-	DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
+	AccountId, AuctionId, AuctionInfo, Balance, BlockNumber, Hash, LockId, Nonce, PendingNftPods,
+	RpcNftData, Signature, DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
 };
 
 pub mod runtime_api;
@@ -441,6 +441,26 @@ impl_runtime_apis! {
 						})
 					})
 					.collect(),
+			}
+		}
+
+		/// Returns all the current auctions without auction id,
+		///  or return a specific auction info with an auction id.
+		fn current_auctions(auction_id: Option<AuctionId>) -> Vec<AuctionInfo>{
+			let data = pallet_auction::Auctions::<Runtime>::iter()
+			.map(|(auction, auction_info)|{
+				AuctionInfo { auction_id: auction, nft_id: auction_info.nft_id, start: auction_info.start, reserve: auction_info.reserve, buy_now: auction_info.buy_now, expiry_block: auction_info.expiry_block, current_bid: auction_info.current_bid }
+			}).collect();
+
+			match auction_id{
+				Some(id) => {
+					if let Some(auction_data) = pallet_auction::Auctions::<Runtime>::get(id){
+						vec![AuctionInfo{ auction_id: id, nft_id: auction_data.nft_id, start: auction_data.start, reserve: auction_data.reserve, buy_now: auction_data.buy_now, expiry_block: auction_data.expiry_block, current_bid: auction_data.current_bid }]
+					}else{
+						data
+					}
+				},
+				None => data,
 			}
 		}
 	}
