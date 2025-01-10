@@ -3,11 +3,13 @@ use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Block as BlockT;
 
+use pallet_auction::AuctionDataFor;
 use pallet_bank::{AccountData, LockReason, LockedFund};
-use primitives::{
-	AccountId, AuctionId, AuctionInfo, Balance, BlockNumber, Hash, LockId, PendingNftPods,
+use primitives::{AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, PendingNftPods};
+use xy_chain_runtime::{
+	runtime_api::{CustomRuntimeApi, DispatchErrorTranslator},
+	Runtime,
 };
-use xy_chain_runtime::runtime_api::{CustomRuntimeApi, DispatchErrorTranslator};
 
 use std::{marker::PhantomData, sync::Arc};
 
@@ -68,7 +70,7 @@ pub trait CustomRpcApi {
 		&self,
 		auction_id: Option<AuctionId>,
 		at: Option<Hash>,
-	) -> RpcResult<Vec<AuctionInfo>>;
+	) -> RpcResult<Vec<(AuctionId, AuctionDataFor<Runtime>)>>;
 }
 
 pub struct CustomRpc<C, B> {
@@ -145,7 +147,7 @@ where
 		&self,
 		auction_id: Option<AuctionId>,
 		at: Option<Hash>,
-	) -> RpcResult<Vec<AuctionInfo>> {
+	) -> RpcResult<Vec<(AuctionId, AuctionDataFor<Runtime>)>> {
 		self.client
 			.runtime_api()
 			.current_auctions(self.unwrap_or_best(at), auction_id)

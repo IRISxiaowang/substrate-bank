@@ -140,11 +140,9 @@ pub struct PendingNftPods {
 	pub receiving: Vec<RpcNftData>,  // Nft that needs to be received
 }
 
-/// Contains the details of Auctions
-/// that provides info on the current auction for customers.
+/// Represents Auction data including its reserve price, expiry block, current price and bider.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Serialize, Deserialize)]
-pub struct AuctionInfo {
-	pub auction_id: AuctionId,
+pub struct AuctionData<AccountId, Balance, BlockNumber> {
 	pub nft_id: NftId,
 	pub start: Option<Balance>,
 	pub reserve: Option<Balance>,
