@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use pallet_auction::AuctionDataFor;
 use scale_info::TypeInfo;
 
 use sp_api::decl_runtime_apis;
@@ -8,7 +9,7 @@ use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 use pallet_bank::AccountData;
-use primitives::{AccountId, Balance, BlockNumber, LockId, PendingNftPods};
+use primitives::{AccountId, AuctionId, Balance, BlockNumber, LockId, PendingNftPods};
 
 /// Custom tool for translating Dispatch error to a human readable format.
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -38,5 +39,10 @@ decl_runtime_apis!(
 		fn fund_unlock_at(who: AccountId, lock_id: LockId) -> BlockNumber;
 		/// Returns certain user's related Nft in POD info.
 		fn pending_pods(who: AccountId) -> PendingNftPods;
+		/// Returns all the current auctions without auction id, or return a specific auction info
+		/// with an auction id.
+		fn current_auctions(
+			auction_id: Option<AuctionId>,
+		) -> Vec<(AuctionId, AuctionDataFor<crate::Runtime>)>;
 	}
 );

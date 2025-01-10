@@ -6,6 +6,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use pallet_auction::AuctionDataFor;
 use pallet_grandpa::AuthorityId as GrandpaId;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -46,8 +47,8 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 use primitives::{
-	AccountId, Balance, BlockNumber, Hash, LockId, Nonce, PendingNftPods, RpcNftData, Signature,
-	DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
+	AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, Nonce, PendingNftPods, RpcNftData,
+	Signature, DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
 };
 
 pub mod runtime_api;
@@ -441,6 +442,17 @@ impl_runtime_apis! {
 						})
 					})
 					.collect(),
+			}
+		}
+
+		/// Returns all the current auctions without auction id,
+		///  or return a specific auction info with an auction id.
+		fn current_auctions(auction_id: Option<AuctionId>) -> Vec<(AuctionId, AuctionDataFor<Runtime>)>{
+			match auction_id{
+				Some(id) => pallet_auction::Auctions::<Runtime>::get(id)
+					.map(|auction|vec![(id, auction)])
+					.unwrap_or_default(),
+				None => pallet_auction::Auctions::<Runtime>::iter().collect(),
 			}
 		}
 	}

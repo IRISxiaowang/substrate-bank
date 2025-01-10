@@ -25,6 +25,7 @@ pallet-bank = { path = "../pallets/pallet-bank" }
 pallet-governance = { path = "../pallets/pallet-governance" }
 pallet-lottery = { path = "../pallets/pallet-lottery" }
 pallet-roles = { path = "../pallets/pallet-roles" }
+pallet-auction = { path = "../pallets/pallet-auction" }
 
 sp-api = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.6.0" }
 sp-core = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.6.0" }

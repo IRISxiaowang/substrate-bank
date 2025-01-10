@@ -2,7 +2,7 @@
 
 use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok};
-use primitives::DOLLAR;
+use primitives::{AuctionData, DOLLAR};
 
 #[test]
 fn can_create_auction() {

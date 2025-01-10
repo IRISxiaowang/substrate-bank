@@ -15,7 +15,7 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*, vec::Vec};
 
-use primitives::{AuctionId, NftId, NftState};
+use primitives::{AuctionData, AuctionId, NftId, NftState};
 use traits::{BasicAccounting, GetTreasury, ManageAuctions, ManageNfts, ManageRoles};
 
 mod mock;
@@ -28,18 +28,6 @@ pub use weights::*;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-/// Represents Auction data including its reserve price, expiry block, current price and bider.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub struct AuctionData<T: Config> {
-	pub nft_id: NftId,
-	pub start: Option<T::Balance>,
-	pub reserve: Option<T::Balance>,
-	pub buy_now: Option<T::Balance>,
-	pub expiry_block: BlockNumberFor<T>,
-	pub current_bid: Option<(T::AccountId, T::Balance)>,
-}
-
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 enum CancelOption<T: Config> {
 	Force,
@@ -50,6 +38,12 @@ enum CancelOption<T: Config> {
 pub mod module {
 
 	use super::*;
+
+	pub type AuctionDataFor<T> = AuctionData<
+		<T as frame_system::Config>::AccountId,
+		<T as Config>::Balance,
+		BlockNumberFor<T>,
+	>;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -136,7 +130,7 @@ pub mod module {
 	/// Stores the data associated with each auction.
 	#[pallet::storage]
 	#[pallet::getter(fn auctions)]
-	pub type Auctions<T: Config> = StorageMap<_, Blake2_128Concat, AuctionId, AuctionData<T>>;
+	pub type Auctions<T: Config> = StorageMap<_, Blake2_128Concat, AuctionId, AuctionDataFor<T>>;
 
 	/// Stores the auction IDs that are set to expire at a specific block.
 	#[pallet::storage]
@@ -187,7 +181,14 @@ pub mod module {
 
 			Auctions::<T>::insert(
 				auction_id,
-				AuctionData { nft_id, start, reserve, buy_now, expiry_block, current_bid: None },
+				AuctionDataFor::<T> {
+					nft_id,
+					start,
+					reserve,
+					buy_now,
+					expiry_block,
+					current_bid: None,
+				},
 			);
 
 			// Append the auction id to the AuctionsExpiryBlock storage.
@@ -298,7 +299,7 @@ pub mod module {
 		}
 
 		/// Get the auction done.
-		fn resolve_auction(auction_id: AuctionId, auction_data: AuctionData<T>) {
+		fn resolve_auction(auction_id: AuctionId, auction_data: AuctionDataFor<T>) {
 			if let Some((bider, price)) = auction_data.current_bid {
 				let bid_pool = T::BidsPoolAccount::get();
 

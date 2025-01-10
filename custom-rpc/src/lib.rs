@@ -3,9 +3,13 @@ use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Block as BlockT;
 
+use pallet_auction::AuctionDataFor;
 use pallet_bank::{AccountData, LockReason, LockedFund};
-use primitives::{AccountId, Balance, BlockNumber, Hash, LockId, PendingNftPods};
-use xy_chain_runtime::runtime_api::{CustomRuntimeApi, DispatchErrorTranslator};
+use primitives::{AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, PendingNftPods};
+use xy_chain_runtime::{
+	runtime_api::{CustomRuntimeApi, DispatchErrorTranslator},
+	Runtime,
+};
 
 use std::{marker::PhantomData, sync::Arc};
 
@@ -59,6 +63,14 @@ pub trait CustomRpcApi {
 	/// Returns certain user's related Nft in POD info.
 	#[method(name = "pending_pods")]
 	fn rpc_pending_pods(&self, who: AccountId, at: Option<Hash>) -> RpcResult<PendingNftPods>;
+	/// Returns all the current auctions without auction id,
+	///  or return a specific auction info with an auction id.
+	#[method(name = "current_auctions")]
+	fn rpc_current_auctions(
+		&self,
+		auction_id: Option<AuctionId>,
+		at: Option<Hash>,
+	) -> RpcResult<Vec<(AuctionId, AuctionDataFor<Runtime>)>>;
 }
 
 pub struct CustomRpc<C, B> {
@@ -128,6 +140,17 @@ where
 		self.client
 			.runtime_api()
 			.pending_pods(self.unwrap_or_best(at), who)
+			.map_err(to_rpc_error)
+	}
+
+	fn rpc_current_auctions(
+		&self,
+		auction_id: Option<AuctionId>,
+		at: Option<Hash>,
+	) -> RpcResult<Vec<(AuctionId, AuctionDataFor<Runtime>)>> {
+		self.client
+			.runtime_api()
+			.current_auctions(self.unwrap_or_best(at), auction_id)
 			.map_err(to_rpc_error)
 	}
 }
