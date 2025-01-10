@@ -1,7 +1,9 @@
 use crate::*;
+use lottery::dispatch_governance_call;
+use pallet_auction::AuctionData;
 use pallet_nft::{CancelReason, NftData};
 use primitives::{NftState, Response};
-use xy_chain_runtime::Nft;
+use xy_chain_runtime::{Auction, Nft};
 
 fn create_an_nft() {
 	// Create an nft.
@@ -27,6 +29,68 @@ fn create_an_nft() {
 		owner: Alice.account(),
 		nft_id: 1u32,
 	}));
+}
+
+#[test]
+fn can_force_burn() {
+	ExtBuilder::default().build().execute_with(|| {
+		// Set up an nft.
+		create_an_nft();
+
+		const BID: u128 = 7 * DOLLAR;
+
+		// Create an auction.
+		assert_ok!(Auction::create_auction(
+			Alice.sign(),
+			1u32,
+			Some(DOLLAR),
+			Some(5 * DOLLAR),
+			Some(10 * DOLLAR)
+		));
+
+		// Check storage Auctions.
+		assert!(pallet_auction::Auctions::<Runtime>::contains_key(1u32));
+
+		// Bob bid the auction.
+		assert_ok!(Auction::bid(Bob.sign(), 1u32, BID));
+
+		// Check storage Auctions.
+		assert_eq!(
+			pallet_auction::Auctions::<Runtime>::get(1u32),
+			Some(AuctionData {
+				nft_id: 1u32,
+				start: Some(DOLLAR),
+				reserve: Some(5 * DOLLAR),
+				buy_now: Some(10 * DOLLAR),
+				expiry_block: 1 + DAY,
+				current_bid: Some((Bob.account(), BID))
+			})
+		);
+
+		// Check Bob balance minus 7 dollars for biding.
+		assert_balance(Bob.account(), INITIAL_BALANCE - BID);
+
+		// Check Alice balance minus 1 dollar with start auction fee.
+		assert_balance(Alice.account(), INITIAL_BALANCE - DOLLAR);
+
+		// Governance force burn.
+		let call = Box::new(RuntimeCall::Nft(pallet_nft::Call::force_burn { nft_id: 1u32 }));
+
+		dispatch_governance_call(call);
+
+		// Check Bob balance that the 7 dollars are back to Bob's account.
+		assert_balance(Bob.account(), INITIAL_BALANCE);
+
+		// Check all the storages are cleaned.
+		assert!(!pallet_nft::Nfts::<Runtime>::contains_key(1u32));
+		assert!(!pallet_nft::Owners::<Runtime>::contains_key(1u32));
+		assert!(!pallet_auction::Auctions::<Runtime>::contains_key(1u32));
+
+		// Check event
+		System::assert_has_event(RuntimeEvent::Nft(pallet_nft::Event::<Runtime>::NftBurned {
+			nft_id: 1u32,
+		}));
+	});
 }
 
 #[test]

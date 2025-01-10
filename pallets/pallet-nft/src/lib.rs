@@ -310,7 +310,7 @@ pub mod module {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			// Remove storage
-			if let Some(nft_data) = Nfts::<T>::take(nft_id) {
+			if let Some(nft_data) = Nfts::<T>::get(nft_id) {
 				match nft_data.state {
 					NftState::Auction(auction_id) => T::AuctionManager::force_cancel(auction_id)?,
 					NftState::POD(pod_id) => PendingPodNfts::<T>::remove(pod_id),
@@ -318,6 +318,7 @@ pub mod module {
 				}
 			}
 			Owners::<T>::remove(nft_id);
+			Nfts::<T>::remove(nft_id);
 
 			Self::deposit_event(Event::<T>::NftBurned { nft_id });
 

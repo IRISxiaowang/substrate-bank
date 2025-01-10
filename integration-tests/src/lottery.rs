@@ -2,7 +2,7 @@ use core::panic;
 
 use crate::*;
 
-fn dispatch_governance_call(call: Box<RuntimeCall>) {
+pub(crate) fn dispatch_governance_call(call: Box<RuntimeCall>) {
 	let mut gov_iter = Governance::authorities().into_iter();
 	assert_ok!(Governance::initiate_proposal(
 		RuntimeOrigin::signed(gov_iter.next().unwrap()),
