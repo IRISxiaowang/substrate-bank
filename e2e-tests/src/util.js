@@ -36,6 +36,26 @@ export async function getApi() {
                         },
                     ],
                     type: 'PendingNftPods',
+                },
+                current_auctions: {
+                    description: 'For getting some or all the auction info.',
+                    params: [
+                        {
+                            name: 'auction_id',
+                            type: 'Option<AuctionId>'
+                        },
+                    ],
+                    type: 'Vec<(AuctionId, AuctionData)>',
+                },
+                nft_data: {
+                    description: 'For getting related Nft data by Nft id.',
+                    params: [
+                        {
+                            name: 'nft_id',
+                            type: 'NftId'
+                        },
+                    ],
+                    type: 'NftData',
                 }
             }
         },
@@ -69,7 +89,26 @@ export async function getApi() {
             },
             PodId: 'u32',
             NftId: 'u32',
-            BlockNumber: 'u32'
+            BlockNumber: 'u32',
+            NftData: {
+                data: 'Vec<u8>',
+                file_name: 'Vec<u8>',
+                state: 'NftState',
+            },
+            NftState: {
+                _enum: ['Free',
+                    'POD(PodId)',
+                    'Auction(AuctionId)',],
+            },
+            AuctionId: 'u32',
+            AuctionData: {
+                nft_id: 'NftId',
+                start: 'Option<String>',
+                reserve: 'Option<String>',
+                buy_now: 'Option<String>',
+                expiry_block: 'BlockNumber',
+                current_bid: 'Option<(u32, String)>',
+            }
         }
     });
     // Wait until we are ready and connected
@@ -104,7 +143,7 @@ export async function sendExtrinsicAndWait(extrinsic, signer) {
     while (!finished) {
         await sleep(500);
     }
-} 
+}
 
 export function bytesArrayToPolkadotAddress(byteArray) {
     // Convert the byte array to a Uint8Array

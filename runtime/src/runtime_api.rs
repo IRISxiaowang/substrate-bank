@@ -9,7 +9,7 @@ use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 use pallet_bank::AccountData;
-use primitives::{AccountId, AuctionId, Balance, BlockNumber, LockId, PendingNftPods};
+use primitives::{AccountId, AuctionId, Balance, BlockNumber, LockId, NftId, PendingNftPods};
 
 /// Custom tool for translating Dispatch error to a human readable format.
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -44,5 +44,7 @@ decl_runtime_apis!(
 		fn current_auctions(
 			auction_id: Option<AuctionId>,
 		) -> Vec<(AuctionId, AuctionDataFor<crate::Runtime>)>;
+		/// Return a specific NFT data with a NFT id.
+		fn nft_data(nft_id: NftId) -> Option<pallet_nft::NftData>;
 	}
 );

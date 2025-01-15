@@ -8,6 +8,9 @@
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, BlockNumberProvider, Saturating},
 	DispatchResult,
@@ -28,6 +31,7 @@ mod benchmarking;
 
 /// Represents NFT data including its raw data and file name.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct NftData {
 	pub data: Vec<u8>,
 	pub file_name: Vec<u8>,

@@ -109,7 +109,6 @@ std = [
 	"pallet-nft/std",
 	"pallet-auction/std",
 
-
 	"primitives/std",
 	"traits/std",
 ]
