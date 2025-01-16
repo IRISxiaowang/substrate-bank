@@ -3,7 +3,7 @@ import { Keyring } from '@polkadot/keyring';
 import * as assert from 'assert';
 
 export async function testAll() {
-    console.log("Starting Polkadot JS Test.");
+    console.log("Starting Polkadot JS Test NFT functionalities.");
     let api = await util.getApi();
 
     await testNftFunctionalities(api);

@@ -1,8 +1,7 @@
 use crate::*;
 use lottery::dispatch_governance_call;
-use pallet_auction::AuctionData;
 use pallet_nft::{CancelReason, NftData};
-use primitives::{NftState, Response};
+use primitives::{AuctionData, NftState, Response};
 use xy_chain_runtime::{Auction, Nft};
 
 fn create_an_nft() {

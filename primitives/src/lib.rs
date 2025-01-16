@@ -40,7 +40,19 @@ pub enum Role {
 }
 
 /// Enum representing the different state that an Nft can have.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	RuntimeDebug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum NftState {
 	Free,
 	POD(PodId),

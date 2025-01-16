@@ -5,7 +5,8 @@ use sp_runtime::traits::Block as BlockT;
 
 use pallet_auction::AuctionDataFor;
 use pallet_bank::{AccountData, LockReason, LockedFund};
-use primitives::{AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, PendingNftPods};
+use pallet_nft::NftData;
+use primitives::{AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, NftId, PendingNftPods};
 use xy_chain_runtime::{
 	runtime_api::{CustomRuntimeApi, DispatchErrorTranslator},
 	Runtime,
@@ -71,6 +72,9 @@ pub trait CustomRpcApi {
 		auction_id: Option<AuctionId>,
 		at: Option<Hash>,
 	) -> RpcResult<Vec<(AuctionId, AuctionDataFor<Runtime>)>>;
+	/// Return a specific NFT data with a NFT id.
+	#[method(name = "nft_data")]
+	fn rpc_nft_data(&self, nft_id: NftId, at: Option<Hash>) -> RpcResult<Option<NftData>>;
 }
 
 pub struct CustomRpc<C, B> {
@@ -151,6 +155,13 @@ where
 		self.client
 			.runtime_api()
 			.current_auctions(self.unwrap_or_best(at), auction_id)
+			.map_err(to_rpc_error)
+	}
+
+	fn rpc_nft_data(&self, nft_id: NftId, at: Option<Hash>) -> RpcResult<Option<NftData>> {
+		self.client
+			.runtime_api()
+			.nft_data(self.unwrap_or_best(at), nft_id)
 			.map_err(to_rpc_error)
 	}
 }

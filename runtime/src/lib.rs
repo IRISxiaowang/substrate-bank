@@ -8,6 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use pallet_auction::AuctionDataFor;
 use pallet_grandpa::AuthorityId as GrandpaId;
+use pallet_nft::NftData;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -47,8 +48,8 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 use primitives::{
-	AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, Nonce, PendingNftPods, RpcNftData,
-	Signature, DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
+	AccountId, AuctionId, Balance, BlockNumber, Hash, LockId, NftId, Nonce, PendingNftPods,
+	RpcNftData, Signature, DAY, DOLLAR, HOUR, SLOT_DURATION, YEAR,
 };
 
 pub mod runtime_api;
@@ -454,6 +455,11 @@ impl_runtime_apis! {
 					.unwrap_or_default(),
 				None => pallet_auction::Auctions::<Runtime>::iter().collect(),
 			}
+		}
+
+		/// Return a specific NFT data with a NFT id.
+		fn nft_data(nft_id: NftId) -> Option<NftData>{
+			pallet_nft::Nfts::<Runtime>::get(nft_id)
 		}
 	}
 
